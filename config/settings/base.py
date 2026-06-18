@@ -43,6 +43,8 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS: list[str] = []
 LOCAL_APPS = [
     "apps.core",
+    "apps.shortener",
+    "apps.analytics",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -106,3 +108,10 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # our source static files
 
 # Use 64-bit integer primary keys by default.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Auth ---------------------------------------------------------------
+# Built-in auth views (django.contrib.auth.urls) for Stage 1; Stage 2 swaps
+# the login flow to django-allauth (Google/Facebook) without touching the
+# shortener/analytics core logic.
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "shortener:my_links"

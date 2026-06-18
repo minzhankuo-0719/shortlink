@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}建立短網址 — ShortLink{% endblock %}
+
+{% block content %}
+  <h1 class="text-xl font-bold mb-4">建立短網址</h1>
+  <form method="post" class="space-y-4 max-w-lg">
+    {% csrf_token %}
+    <div>
+      <label class="block text-sm mb-1" for="{{ form.original_url.id_for_label }}">原始網址</label>
+      {{ form.original_url }}
+      {% if form.original_url.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.original_url.errors|join:"、" }}</p>
+      {% endif %}
+    </div>
+    <div>
+      <label class="block text-sm mb-1" for="{{ form.title.id_for_label }}">標題（選填）</label>
+      {{ form.title }}
+    </div>
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+      建立
+    </button>
+  </form>
+{% endblock %}

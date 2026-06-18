@@ -121,6 +121,103 @@ def healthz(request):
 
 ---
 
+### 6. Stage 0 收尾：ruff + pre-commit + README
+
+**ruff** 裝成 dev 依賴（`uv add --dev ruff pre-commit`，只在開發機需要，不會跟著上線），設定寫在 `pyproject.toml` 的 `[tool.ruff]`：
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+```
+這取代了過去 Python 圈常見的「flake8 + isort + black」三件套——ruff 一個工具用 Rust 重寫了它們的功能，速度快很多，設定也只要一處。
+
+**pre-commit** 是「在 `git commit` 真正寫進歷史之前，自動跑一輪檢查」的機制。設定檔 `.pre-commit-config.yaml` 掛了：
+- `ruff-check --fix` + `ruff-format`：檢查並自動修正程式碼風格
+- `trailing-whitespace` / `end-of-file-fixer` / `check-yaml`：抓常見小毛病（行尾多餘空白、檔案沒有結尾換行、YAML 語法錯誤）
+
+跑 `uv run pre-commit install` 把這串檢查掛進 `.git/hooks/pre-commit`（只需做一次），之後每次 commit 都會自動跑；第一次手動驗證全部檔案用 `uv run pre-commit run --all-files`。
+
+**README.md** 是給「第一次看到這個 repo 的人」（包含面試官）的入口：專案是什麼、技術選型、3 行指令能跑起來、進度看哪裡。跟 `CLAUDE.md`（給協作 Agent 的詳細事實來源）分工：README 對外、CLAUDE.md 對內。
+
+---
+
+## Stage 1 — 核心功能（逐檔解說）
+
+### 0. 這次做了什麼
+
+「用內建帳號登入 → 建立短網址 → 造訪短網址被 302 重導到原始網址 → 在儀表板看到點擊數與來源 IP」整條路徑全部接通。刻意**不碰 OAuth**（Stage 2 才做），這樣核心邏輯先獨立驗證過，之後換登入方式時，`shortener` / `analytics` 的程式碼幾乎不用改。
+
+### 1. 為什麼要有「儀表板」、它到底是什麼
+
+職缺信件規格寫「可看到自己縮網址的點擊成效與來源 IP」——這句話換成工程語言，就是要做一個**登入後才能看的頁面，把資料庫裡跟自己有關的資料查出來，整理成人看得懂的畫面**。這個頁面就叫「儀表板（dashboard）」。它不是什麼特殊技術，本質是：
+
+```
+資料庫查詢（ORM） -> view 把查詢結果包成 context -> template 把 context 畫成 HTML
+```
+
+`apps/shortener/views.py` 的 `my_links` 就是這支「承辦人」：查出 `request.user` 自己擁有的 `ShortLink`，用 `annotate(click_count=Count("clicks"))` 順手在同一次查詢裡算出每條的點擊數（不用每條另外查一次，省掉 N+1 查詢問題），再用 `prefetch_related("clicks")` 把每條的點擊紀錄一次性撈出來（同樣是避免迴圈裡每條都各查一次資料庫）。Stage 1 先做「列表頁直接展開最近幾筆點擊」這個最簡單版本，Stage 6 才會升級成圖表。
+
+### 2. Model 落地：MVT 的 M 終於用到
+
+Stage 0 的 MVT 心智模型裡，Model 一直是空的（沒有資料庫表）。這次新增兩個 app：
+- `apps/shortener/models.py` 的 `ShortLink`：一條短網址記錄，`owner` 是 `ForeignKey` 指回 Django 內建的 `User`（`settings.AUTH_USER_MODEL`，不直接寫 `User` 是為了將來如果換成自訂使用者模型，這裡不用改）。
+- `apps/analytics/models.py` 的 `Click`：一筆點擊記錄，`link` 是 `ForeignKey` 指回 `ShortLink`。
+
+寫完 model 要跑兩個指令：
+- `makemigrations`：Django 比對 model 程式碼跟「上一次記錄的狀態」，把差異寫成一份 migration 檔（`apps/shortener/migrations/0001_initial.py`），這是「打算對資料庫做什麼改動」的說明書，會進版控。
+- `migrate`：真正把 migration 檔案套用到資料庫，建出實際的表。
+
+> 考點：migration 是「改動計畫」，跟資料庫實際狀態是兩件事；同一份程式碼在不同環境（本機/CI/正式）各自 `migrate` 一次，資料庫結構才會一致。
+
+### 3. `services.py`：為什麼商業邏輯不寫在 view 或 model 裡
+
+`apps/shortener/services.py` 的 `generate_short_code()` / `create_short_link()`，`apps/analytics/services.py` 的 `get_client_ip()` / `record_click()`，都是「做事的邏輯」，不是「接請求」或「定義資料表」。如果這些邏輯直接寫在 view 函式裡（叫做 **fat view**）或塞進 model 的方法裡（**fat model**），會有兩個問題：
+1. 之後想在別的地方重用（例如 Stage 6 的 DRF API、或一個管理用的命令稿）就要複製貼上。
+2. 程式碼變得難測試——測試一個 view 要連帶處理 HTTP request/response，但測試「短碼產生器有沒有正確避開碰撞」根本不需要 HTTP。
+
+`services.py` 把「邏輯」單獨抽出來，變成一般的 Python 函式，可以被 view、admin、command、API 共用，也能被單獨測試（Stage 5 會補上 pytest）。
+
+### 4. 短碼產生：`secrets` 模組
+
+`generate_short_code()` 用 `secrets.choice`，不是 `random.choice`。`random` 模組是給「模擬/遊戲」用的，它的演算法是可預測的（知道種子或夠多輸出就能推算下一個值）；`secrets` 是 Python 內建的**密碼學安全**隨機數來源，專門設計給「會影響安全性」的場景（這裡是短碼，如果可被預測，等於可以被有心人猜出別人的短網址）。完整取捨見 [`docs/adr/0001-short-code-generation.md`](adr/0001-short-code-generation.md)。
+
+### 5. View 與 URL：`@login_required`、`redirect()`、404
+
+`apps/shortener/views.py` 三支 view：
+- `create_link`：`@login_required` 是一個**裝飾器（decorator）**，包住 view 函式，會在執行前先檢查 `request.user` 有沒有登入——沒登入就自動轉去 `LOGIN_URL`（設定在 `config/settings/base.py`），登入完再轉回來。這就是「未登入導向登入頁」的標準做法，不用自己寫 if/else。
+- `my_links`：見上面第 1 點。
+- `redirect_short_link`：用 `get_object_or_404` 查短碼，查不到（或 `is_active=False`）就自動回 404，不用自己寫 try/except；查到就呼叫 `record_click()` 記一筆點擊，再用 `redirect(link.original_url)` 跳轉——Django 的 `redirect()` 預設就是 302，這個選擇的理由見 [`docs/adr/0002-redirect-302-not-301.md`](adr/0002-redirect-302-not-301.md)。
+
+URL 設計上，`apps/shortener/urls.py` 把 `<str:short_code>` 這個「萬用字元」路由放在**最後一條**，因為 Django 是按順序比對 urlpatterns，如果把它放前面，"links/new"、"links/" 這些更明確的路徑反而會被它先吃掉（短碼也可能剛好叫 "links"）。
+
+### 6. 內建登入：`django.contrib.auth.urls`
+
+Stage 1 故意不自己寫登入邏輯，直接在 `config/urls.py` 加一行 `include("django.contrib.auth.urls")`，Django 內建就會提供 `/accounts/login/`、`/accounts/logout/` 等一整組 view。我們只需要補一個 `templates/registration/login.html`（Django 找登入模板的固定路徑），畫面就會用我們的樣式呈現。Stage 2 接 allauth 時，這行會換成 allauth 的 urls，但 `request.user` 這個介面對 `shortener`/`analytics` 完全不變——這就是「核心邏輯跟登入方式解耦」的具體做法。
+
+### 7. Client IP 解析的安全陷阱
+
+`get_client_ip()` 看起來只是兩行 if/else，但背後有一個重要的安全概念：`X-Forwarded-For` 這個標頭**任何人都可以偽造**，只有在「請求一定會經過我們信任的反向代理，且代理會覆寫這個標頭」的部署環境下才可信。完整推理見 [`docs/adr/0003-client-ip-parsing.md`](adr/0003-client-ip-parsing.md)。本機開發時這個標頭不存在，函式會退回 `REMOTE_ADDR`（也就是 `127.0.0.1`）。
+
+### 8. Tailwind（CDN 版）
+
+`templates/base.html` 的 `<head>` 加了一行 `<script src="https://cdn.tailwindcss.com">`。這是 Tailwind 的「零設定」用法：瀏覽器載入這支 script 後，它會掃描頁面上所有 HTML 的 class（例如 `class="bg-white border rounded p-4"`），即時生成對應的 CSS。優點是不用任何建置流程（不用 Node.js/npm/webpack），缺點是這支 script 本身偏大、且沒有把「沒用到的樣式」剔除（purge），不適合正式上線。Stage 1 求快、求畫面看得過去；如果之後要正式打磨（Stage 8），會換成 Tailwind CLI 安裝，從原始碼掃描需要的 class，產生一份精簡的 CSS 檔案。
+
+### Stage 1 自我檢查題（答得出來才算懂）
+
+1. `makemigrations` 跟 `migrate` 差在哪？為什麼兩個都需要？
+2. 為什麼商業邏輯要放 `services.py`，不要直接寫在 view 裡？
+3. `@login_required` 在背後做了什麼？
+4. 為什麼短碼產生用 `secrets` 而不是 `random`？
+5. 為什麼重導要用 302 不是 301？
+6. `X-Forwarded-For` 為什麼不能直接信任？什麼情況下它才可信？
+7. `annotate(Count(...))` 跟 `prefetch_related` 各解決什麼問題？
+8. 儀表板本質上是什麼？跟「查資料庫 + 排版」有什麼關係？
+
+---
+
 ### Stage 0 自我檢查題（答得出來才算懂）
 
 1. Django 的 project 和 app 差在哪？

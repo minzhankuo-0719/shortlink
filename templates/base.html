@@ -4,9 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ShortLink{% endblock %}</title>
+  <!-- CDN build: zero-config, good enough for Stage 1. Swap to the Tailwind
+       CLI (with content purging) once the UI needs to be production-ready. -->
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <main>
+<body class="bg-gray-50 text-gray-900">
+  <header class="bg-white border-b">
+    <nav class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="{% url 'core:home' %}" class="font-semibold">ShortLink</a>
+      <div class="flex items-center gap-4 text-sm">
+        {% if user.is_authenticated %}
+          <a href="{% url 'shortener:my_links' %}" class="hover:underline">我的短網址</a>
+          <a href="{% url 'shortener:create_link' %}" class="hover:underline">建立短網址</a>
+          <form method="post" action="{% url 'logout' %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="hover:underline">登出（{{ user.username }}）</button>
+          </form>
+        {% else %}
+          <a href="{% url 'login' %}" class="hover:underline">登入</a>
+        {% endif %}
+      </div>
+    </nav>
+  </header>
+  <main class="max-w-3xl mx-auto px-4 py-8">
     {% block content %}{% endblock %}
   </main>
 </body>

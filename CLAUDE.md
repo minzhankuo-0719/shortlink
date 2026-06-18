@@ -7,8 +7,8 @@
 
 ## 📍 目前進度（每次開工/收工都要更新這兩行）
 
-- **目前 Stage**：Stage 0（🟡 進行中；Django 骨架已可運行並驗證：`/` 與 `/healthz` 皆回 200）
-- **下一步**：設定 ruff + pre-commit，寫 README 骨架，然後 `git init` + 建立 GitHub repo + 首次 commit/push（即完成 Stage 0）
+- **目前 Stage**：Stage 2（⬜ 待開始；Stage 0、Stage 1 已完成 ✅）
+- **下一步**：安裝設定 django-allauth，接上 Google + Facebook OAuth provider，把 `config/urls.py` 的內建 auth urls 換成 allauth（`shortener`/`analytics` 核心邏輯不用動）
 
 狀態圖例：⬜ 未開始｜🟡 進行中｜✅ 完成
 
@@ -89,6 +89,7 @@ templates/   static/   docs/{architecture.md, adr/, learning-log.md, interview-q
 
 - **開工前先讀本檔**，從「📍 目前進度」找到要做的 Stage；**依序做、不跳階**。
 - **小步可審查**：一個功能一個 commit，**Conventional Commits**（`feat:`/`fix:`/`docs:`…）；feature branch + PR。
+- **commit message 不要寫 Stage 編號**（如「Stage 1」「Stage 2」）。Stage 是這份內部進度文件的階段劃分，不是給外部讀 git log 的人看的概念；commit message 只描述這次改動本身做了什麼（例如 `feat: add shortener app with short link creation`），不要參照內部階段名稱。
 - 程式碼要**作者本人能逐行看懂**：type hints + docstring + 適當註解；實作每塊先解釋「做什麼/為什麼」。
 - 用 **Context7** 拉當前版本的 Django/allauth/DRF 文件，勿憑舊記憶。
 - 關鍵決策寫進 `docs/adr/`；學習重點寫進 `docs/learning-log.md`；**面試可能被問的概念整理進 `docs/interview-qa.md`**（含簡答 + 延伸）。
@@ -114,24 +115,29 @@ gcloud run deploy ...                     # 部署 Cloud Run（Stage 3 後）
 
 > 每個 Stage：**目標 → 任務（checkbox）→ 完成定義（驗收）**。Agent 完成後更新狀態與勾選。
 
-### Stage 0 — 專案地基　狀態：🟡 進行中
+### Stage 0 — 專案地基　狀態：✅ 完成
 **目標**：可運行的 Django 骨架 + 工具鏈 + repo + 本檔落地成 `CLAUDE.md`。
 - [x] `uv` 起專案、安裝 Django、建立 `config/`（含 settings 分層 base/dev/prod + django-environ）
 - [x] 首頁 view + `/healthz` 健康檢查端點（`apps/core`）
 - [x] 把計畫落地成 `CLAUDE.md`、`docs/` 初始化（已有 `docs/interview-qa.md`）
 - [x] `.gitignore` + `.env.example`
-- [ ] ruff + pre-commit + README 骨架
-- [ ] `gh` 建立 GitHub repo、首次 commit/push
+- [x] ruff + pre-commit + README 骨架
+- [x] `gh` 建立 GitHub repo、首次 commit/push
 **完成定義**：`runserver` 本機可開首頁；`/healthz` 回 200（✅ 已驗證）；pre-commit 通過；已 push 上 GitHub。
 
-### Stage 1 — 核心功能（本機 MVP，先用 Django 內建登入）　狀態：⬜
+### Stage 1 — 核心功能（本機 MVP，先用 Django 內建登入）　狀態：✅ 完成
 **目標**：本機就能「建立短網址 → 重導 → 看點擊數與來源 IP」（先用內建 auth，**刻意把 OAuth 風險與核心邏輯解耦**）。
-- [ ] `shortener`：`ShortLink` 模型 + migration；`services.py` 短碼產生（隨機 base62 + 碰撞重試）
-- [ ] 登入後的建立短網址表單（綁 `request.user`）+ 我的短網址列表
-- [ ] 重導 view：依 `short_code` 取 `original_url` 並 **302** 跳轉
-- [ ] `analytics`：`Click` 模型；重導時記錄 `ip / user_agent / referer / created_at`
-- [ ] 儀表板顯示每條短網址的點擊數與來源 IP；Tailwind 基本版型
-**完成定義**：本機用內建帳號登入後，建立→造訪→重導成功，且儀表板看得到點擊數與來源 IP。
+- [x] `shortener`：`ShortLink` 模型 + migration；`services.py` 短碼產生（隨機 base62 + 碰撞重試）
+- [x] 登入後的建立短網址表單（綁 `request.user`）+ 我的短網址列表
+- [x] 重導 view：依 `short_code` 取 `original_url` 並 **302** 跳轉
+- [x] `analytics`：`Click` 模型；重導時記錄 `ip / user_agent / referer / created_at`
+- [x] 儀表板顯示每條短網址的點擊數與來源 IP；Tailwind 基本版型
+**完成定義**：本機用內建帳號登入後，建立→造訪→重導成功，且儀表板看得到點擊數與來源 IP。（✅ 已用 Django test client 跑過一次完整流程驗證）
+
+**備註（這次開工決定，供下一個 Agent 接續時參考）**：
+- 沒有建立 `apps/accounts`，直接在 `config/urls.py` 用 `include("django.contrib.auth.urls")` 撐住登入/登出；Stage 2 接 allauth 時再正式生出 `apps/accounts`。
+- Tailwind 目前是 CDN 版（`<script src="https://cdn.tailwindcss.com">`），零設定但未 purge，正式打磨（Stage 8）再換成 CLI 安裝。
+- 三個關鍵決策（短碼產生、302 重導、X-Forwarded-For 解析）已寫成 `docs/adr/0001~0003`。
 
 ### Stage 2 — Social Login（Google + Facebook）　狀態：⬜
 **目標**：用 django-allauth 接上 Google/FB 登入（`request.user` 抽象不變，核心程式碼幾乎不動）。
