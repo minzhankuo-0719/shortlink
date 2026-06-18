@@ -9,7 +9,12 @@ DEBUG = False
 SECRET_KEY = env("SECRET_KEY")
 
 # ALLOWED_HOSTS and DATABASE_URL must come from the environment (see base.py).
-# CSRF_TRUSTED_ORIGINS for the Cloud Run domain is added in the deploy stage.
+
+# Django's CSRF check compares the request's Origin header against this list
+# for any "unsafe" (POST/PUT/...) request — required because ALLOWED_HOSTS
+# alone doesn't satisfy it. Must include the scheme, e.g.
+# "https://shortlink-xxxx-uc.a.run.app", and later the custom domain too.
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 # --- Behind a TLS-terminating proxy (Cloud Run) -----------------------------
 # Cloud Run terminates HTTPS and forwards the original scheme in this header,

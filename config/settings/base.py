@@ -56,6 +56,10 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serves collectstatic's output straight from the container — no separate
+    # CDN/bucket needed for a low-traffic app. Must sit right after security
+    # middleware and before everything else, per WhiteNoise's own docs.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -114,6 +118,18 @@ USE_TZ = True  # Store timestamps in UTC, render in TIME_ZONE.
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # `collectstatic` target (served in prod)
 STATICFILES_DIRS = [BASE_DIR / "static"]  # our source static files
+
+# WhiteNoise's manifest storage hashes filenames for far-future cache headers
+# and gzip/brotli-compresses them at collectstatic time, so prod serves
+# static assets efficiently straight out of the container.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Use 64-bit integer primary keys by default.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
