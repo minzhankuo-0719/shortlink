@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}ShortLink — 縮網址服務{% endblock %}
+
+{% block content %}
+  <h1>ShortLink ✂️</h1>
+  <p>Django 縮網址服務。Stage 0 骨架運作中。</p>
+  <p>
+    <a href="{% url 'core:healthz' %}">/healthz</a> ·
+    <a href="/admin/">/admin</a>
+  </p>
+{% endblock %}
