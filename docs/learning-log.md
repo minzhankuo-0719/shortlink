@@ -218,6 +218,55 @@ Stage 1 故意不自己寫登入邏輯，直接在 `config/urls.py` 加一行 `i
 
 ---
 
+## Stage 2：Social Login（django-allauth）
+
+### 1. 為什麼用 django-allauth，不自己寫 OAuth
+
+OAuth 流程看起來簡單（跳到 Google → 使用者同意 → 跳回我們的網站帶一個 code），但細節很多陷阱：CSRF/state 參數防護、token 過期重新整理、第一次登入要不要自動建立帳號、同一個 email 在我們系統已有帳號時要不要自動關聯、各家供應商 API 形狀都不同……這些都是「資安相關、容易做錯」的程式碼，業界標準做法是交給一個被大量專案驗證過的套件，而不是自己刻一份。`django-allauth` 是 Django 生態圈最主流的選擇。
+
+### 2. 安裝後多了哪些 app
+
+`config/settings/base.py` 的 `THIRD_PARTY_APPS` 多了 5 個：
+- `allauth`、`allauth.account`：帳號核心（登入/登出/signup/密碼）
+- `allauth.socialaccount`：社群登入框架本身
+- `allauth.socialaccount.providers.google`、`.facebook`：各供應商的 OAuth 細節（API endpoint、要哪些 scope）
+
+每多裝一個 provider，就是多 import 一個 `providers.<name>` app，框架其餘部分不用改。
+
+### 3. `AUTHENTICATION_BACKENDS` 在做什麼
+
+Django 的登入機制其實是「依序問過一串 backend：你認得這個帳密／token 嗎？」。我們現在有兩個 backend：
+- `ModelBackend`：Django 內建，負責「使用者名稱 + 密碼」這種傳統登入（Stage 1 建的帳號就是靠它認證）。
+- `allauth.account.auth_backends.AuthenticationBackend`：負責 allauth 自己的登入流程（包含社群登入完成後，把「Google 這個人」對應回我們資料庫的哪個 `User`）。
+
+兩個都列出來，代表「使用者名稱密碼」跟「Google/Facebook」兩條路都能成功登入，`request.user` 最後拿到的都是同一種 Django `User` 物件，`shortener`/`analytics` 完全不用區分使用者是怎麼登入的。
+
+### 4. 為什麼不需要 `django.contrib.sites`
+
+allauth 比較舊的教學常會要求裝 `django.contrib.sites` 並設定 `SITE_ID = 1`，因為早期版本把每個 OAuth app 的憑證存在資料庫的 `SocialApp` 表，需要 sites framework 來決定「這個 app 屬於哪個網域」。0.48.0 之後，allauth 支援直接在 `settings.py` 的 `SOCIALACCOUNT_PROVIDERS["<provider>"]["APPS"]` 寫憑證（我們採用的方式），這條路徑完全不依賴 sites framework，少一層設定、少一個資料表。詳細取捨見 [`docs/adr/0004-social-login-credentials.md`](adr/0004-social-login-credentials.md)。
+
+### 5. 憑證為什麼用環境變數，不是寫在程式碼或資料庫
+
+延續 Stage 0 就定下的 12-factor 原則（`SECRET_KEY`/`DATABASE_URL` 都走環境變數）。`_oauth_app()` 這個 helper 函式（`config/settings/base.py`）刻意做了一件小事：**如果環境變數沒填，回傳空列表，不是回傳一個「憑證是空字串」的假 app**。原因是 allauth 用「這個 provider 有沒有至少一個 app」來決定登入頁要不要顯示對應的按鈕；如果硬塞一個空字串的 app，按鈕會出現但點下去必定失敗。回傳空列表，才能讓「沒設定 Google 憑證」跟「使用者根本沒看到 Google 按鈕」這兩件事保持一致，使用者體驗上不會看到一個註定壞掉的按鈕。
+
+### 6. URL 名稱從 `login`/`logout` 換成 `account_login`/`account_logout`
+
+Stage 1 用 Django 內建的 `django.contrib.auth.urls`，登入頁的 URL name 叫 `login`。換成 `include("allauth.urls")` 後，allauth 自己的登入頁叫 `account_login`、登出叫 `account_logout`（這是 allauth 套件自己定義的名稱，跟 Django 內建的不是同一套）。所以 `LOGIN_URL` 設定值跟 `templates/base.html` 裡所有 `{% url 'login' %}` 都要跟著換成新名稱，否則會在 reverse URL 的時候直接報錯（`NoReverseMatch`）——這也是為什麼前面強調「核心邏輯解耦」指的是 `shortener`/`analytics` 不用改，不是「完全不用碰任何程式碼」。
+
+### 7. 沒有真的 Google/Facebook 憑證之前，畫面會怎樣
+
+`SOCIALACCOUNT_PROVIDERS` 裡兩個 provider 的 `APPS` 在沒填環境變數時都是空列表，所以 allauth 的登入頁範本（`{% get_providers %}` 找不到任何 provider）就只會顯示使用者名稱/密碼表單，跟 Stage 1 的體驗幾乎一樣——這是刻意設計的，讓我們現在就能先驗證「程式碼接得起來、不會炸」，之後只要去 Google Cloud Console / Facebook 開發者後台申請真的憑證、填進 `.env`，重啟伺服器，按鈕就會自動冒出來，不用再改一行程式碼。
+
+### Stage 2 自我檢查題（答得出來才算懂）
+
+1. `AUTHENTICATION_BACKENDS` 裡兩個 backend 分別負責什麼？為什麼兩個都要留著？
+2. allauth 0.48.0 之後為什麼不強制需要 `django.contrib.sites`？
+3. 為什麼 `_oauth_app()` 在憑證缺漏時要回傳 `[]`，而不是回傳一個空字串的 app？
+4. 為什麼 OAuth 憑證要放環境變數，不是寫在程式碼或存進資料庫？
+5. 如果完全沒有設定任何 Google/Facebook 憑證，使用者還能不能登入？登入頁會長什麼樣？
+
+---
+
 ### Stage 0 自我檢查題（答得出來才算懂）
 
 1. Django 的 project 和 app 差在哪？

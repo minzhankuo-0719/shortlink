@@ -40,7 +40,13 @@ DJANGO_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 ]
-THIRD_PARTY_APPS: list[str] = []
+THIRD_PARTY_APPS = [
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.facebook",
+]
 LOCAL_APPS = [
     "apps.core",
     "apps.shortener",
@@ -56,6 +62,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # allauth needs to inspect/modify the request on every view, e.g. to
+    # surface its messages and handle its account-related redirects.
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -109,9 +118,55 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # our source static files
 # Use 64-bit integer primary keys by default.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# --- Auth ---------------------------------------------------------------
-# Built-in auth views (django.contrib.auth.urls) for Stage 1; Stage 2 swaps
-# the login flow to django-allauth (Google/Facebook) without touching the
-# shortener/analytics core logic.
-LOGIN_URL = "login"
+# --- Auth (django-allauth) ---------------------------------------------------
+# Stage 1 used Django's built-in auth views; Stage 2 swaps the login flow to
+# allauth (Google/Facebook) without touching shortener/analytics — both still
+# just read `request.user`, set by whichever backend below authenticated them.
+LOGIN_URL = "account_login"  # allauth's URL name, not Django's built-in "login"
 LOGIN_REDIRECT_URL = "shortener:my_links"
+
+AUTHENTICATION_BACKENDS = [
+    # Needed for Django admin and the original username/password login.
+    "django.contrib.auth.backends.ModelBackend",
+    # allauth's own backend, used for the social (Google/Facebook) login flow.
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+# Accept either username or email on the login form — our Stage 1 accounts
+# only have a username, but allauth-created social accounts get an email.
+ACCOUNT_LOGIN_METHODS = {"username", "email"}
+ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
+# No mail server configured yet, so don't require clicking a verification link.
+ACCOUNT_EMAIL_VERIFICATION = "none"
+
+
+def _oauth_app(client_id_var: str, secret_var: str) -> list[dict[str, str]]:
+    """Build allauth's `APPS` list for one provider from env vars.
+
+    Returns an empty list if either value is missing, so an unconfigured
+    provider has *no* app at all (allauth's `get_providers` then correctly
+    hides its login button) instead of a broken app with empty credentials.
+    """
+    client_id = env(client_id_var, default="")
+    secret = env(secret_var, default="")
+    if not client_id or not secret:
+        return []
+    return [{"client_id": client_id, "secret": secret, "key": ""}]
+
+
+# Credentials come from environment variables (never hard-coded into the
+# repo). See docs/adr/0004-social-login-credentials.md for why an
+# unconfigured provider must end up with an empty APPS list, not one with
+# blank values.
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": _oauth_app("GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"),
+        "SCOPE": ["profile", "email"],
+        "OAUTH_PKCE_ENABLED": True,
+    },
+    "facebook": {
+        "APPS": _oauth_app("FACEBOOK_OAUTH_CLIENT_ID", "FACEBOOK_OAUTH_CLIENT_SECRET"),
+        "SCOPE": ["email", "public_profile"],
+        "METHOD": "oauth2",
+    },
+}
