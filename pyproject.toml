@@ -6,3 +6,18 @@ dependencies = [
     "django>=5.2,<5.3",
     "django-environ>=0.13.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.17",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+# E/F = pyflakes/pycodestyle 基本錯誤與風格；I = import 排序（取代 isort）；
+# UP = 自動建議新版 Python 寫法；B = bugbear，抓常見邏輯陷阱。
+select = ["E", "F", "I", "UP", "B"]
