@@ -7,8 +7,8 @@
 
 ## 📍 目前進度（每次開工/收工都要更新這兩行）
 
-- **目前 Stage**：Stage 2（⬜ 待開始；Stage 0、Stage 1 已完成 ✅）
-- **下一步**：安裝設定 django-allauth，接上 Google + Facebook OAuth provider，把 `config/urls.py` 的內建 auth urls 換成 allauth（`shortener`/`analytics` 核心邏輯不用動）
+- **目前 Stage**：Stage 2（✅ 完成；Google 與 Facebook OAuth 憑證已申請、已填入本機 `.env`，並通過真人瀏覽器測試，皆能登入並建立/查看短網址）
+- **下一步**：進入 Stage 3 — 部署上 Cloud Run（多階段 Dockerfile + Gunicorn/WhiteNoise、Cloud SQL、Secret Manager、正式網域的 OAuth redirect URI）
 
 狀態圖例：⬜ 未開始｜🟡 進行中｜✅ 完成
 
@@ -139,12 +139,14 @@ gcloud run deploy ...                     # 部署 Cloud Run（Stage 3 後）
 - Tailwind 目前是 CDN 版（`<script src="https://cdn.tailwindcss.com">`），零設定但未 purge，正式打磨（Stage 8）再換成 CLI 安裝。
 - 三個關鍵決策（短碼產生、302 重導、X-Forwarded-For 解析）已寫成 `docs/adr/0001~0003`。
 
-### Stage 2 — Social Login（Google + Facebook）　狀態：⬜
+### Stage 2 — Social Login（Google + Facebook）　狀態：✅ 完成
 **目標**：用 django-allauth 接上 Google/FB 登入（`request.user` 抽象不變，核心程式碼幾乎不動）。
-- [ ] 安裝設定 django-allauth；Google provider（OAuth consent + 憑證）
-- [ ] Facebook provider（FB App，dev mode + 自己當測試者即可）；本機 + 正式兩組 redirect URI
-- [ ] 登入/登出頁；未登入導向登入；secrets 走環境變數
-**完成定義**：本機可用 Google 與 Facebook 帳號登入並建立/查看自己的短網址。
+- [x] 安裝設定 django-allauth（`INSTALLED_APPS`/`AUTHENTICATION_BACKENDS`/`MIDDLEWARE`、`config/urls.py` 換成 `include("allauth.urls")`、`SOCIALACCOUNT_PROVIDERS` 從環境變數讀 Google/Facebook 憑證，缺憑證時該 provider 的登入按鈕自動不顯示）；已用 Django test client 驗證帳密登入/登出在新設定下仍正常
+- [x] Google provider（OAuth consent + 憑證）——已在 Google Cloud Console 申請，填進 `.env`
+- [x] Facebook provider（FB App，dev mode + 自己當測試者即可）；本機 redirect URI（`http://localhost:8000/...`，FB 對 `localhost` 自動允許 HTTP）——已在 Facebook Developer 後台申請；正式環境的 redirect URI 留待 Stage 3 部署後補上
+- [x] 登入/登出頁（沿用 allauth 內建範本，尚未套 Tailwind 樣式）；未登入導向登入；secrets 走環境變數（見 [`docs/adr/0004-social-login-credentials.md`](docs/adr/0004-social-login-credentials.md)）
+**完成定義**：本機可用 Google 與 Facebook 帳號登入並建立/查看自己的短網址。**✅ 已通過真人瀏覽器測試：Google、Facebook 皆登入成功，且能建立/查看短網址。**
+**備註**：沒有另外建立 `apps/accounts`——allauth 本身已是一個完整的 app，目前不需要自訂 profile model，沿用 allauth 內建的 `account`/`socialaccount` app 即可；若之後需要自訂使用者欄位再評估是否要加 `apps/accounts`。
 
 ### Stage 3 — 部署上 Cloud Run　狀態：⬜　← ✅ **可繳交里程碑**
 **目標**：服務有公開 HTTPS 網址，正式環境全流程可用。
