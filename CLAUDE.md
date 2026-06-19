@@ -7,8 +7,8 @@
 
 ## 📍 目前進度（每次開工/收工都要更新這兩行）
 
-- **目前 Stage**：Stage 3（🟡 進行中；程式碼/基礎設施已備齊並在本機 docker compose 跑通完整流程——多階段 Dockerfile、WhiteNoise、`docker-compose.yml`、`docs/adr/0005-cloud-run-deployment.md`、README 的完整部署 runbook。實際 GCP 資源建立與部署需由作者本人執行 `gcloud` 指令，尚未進行）
-- **下一步**：作者依 README「部署到 Cloud Run」章節，自行安裝 gcloud、建立 GCP 專案/帳單、依序執行指令建立 Cloud SQL/Secret Manager/Cloud Run，部署後回 Google/Facebook 後台補正式網域的 OAuth redirect URI，最後做真人瀏覽器驗收（登入→建立→重導→看點擊）。驗收通過後再把 Stage 3 checkbox 與狀態改為 ✅
+- **目前 Stage**：Stage 3（✅ 完成；已部署到 Cloud Run，服務網址 https://shortlink-ljrbbufbfq-de.a.run.app ，資料庫接 Cloud SQL（Postgres,`asia-east1`,`db-f1-micro`），secrets 走 Secret Manager，Google/Facebook OAuth redirect URI 已補上正式網址，並通過真人瀏覽器完整驗收：登入（Google + Facebook）→ 建立短網址 → 造訪重導 → 儀表板看到點擊數與來源 IP）
+- **下一步**：進入 Stage 4 — 效能（作者指定優先項）：重導走 Redis cache-aside、DB 索引 + `EXPLAIN` 分析、非同步寫入點擊、建立/重導加 rate limiting
 
 狀態圖例：⬜ 未開始｜🟡 進行中｜✅ 完成
 
@@ -148,16 +148,28 @@ gcloud run deploy ...                     # 部署 Cloud Run（Stage 3 後）
 **完成定義**：本機可用 Google 與 Facebook 帳號登入並建立/查看自己的短網址。**✅ 已通過真人瀏覽器測試：Google、Facebook 皆登入成功，且能建立/查看短網址。**
 **備註**：沒有另外建立 `apps/accounts`——allauth 本身已是一個完整的 app，目前不需要自訂 profile model，沿用 allauth 內建的 `account`/`socialaccount` app 即可；若之後需要自訂使用者欄位再評估是否要加 `apps/accounts`。
 
-### Stage 3 — 部署上 Cloud Run　狀態：🟡 進行中　← ✅ **可繳交里程碑**
+### Stage 3 — 部署上 Cloud Run　狀態：✅ 完成　← ✅ **可繳交里程碑**
 **目標**：服務有公開 HTTPS 網址，正式環境全流程可用。
 - [x] 多階段 Dockerfile + Gunicorn + WhiteNoise；docker-compose 本機 parity（已在本機用 `docker compose`
   跑通 prod-like 容器的完整流程：`/livez`、WhiteNoise 靜態檔、登入、建立短網址、302 重導、點擊記錄）
-- [ ] 部署 Cloud Run；資料庫接 Cloud SQL（Postgres）；secrets 走 Secret Manager
-- [ ] 正式網域設定 OAuth callback + `CSRF_TRUSTED_ORIGINS`；跑 migration；`/livez` 正常
-- [x] README 補上部署 runbook 與服務網址欄位（網址留待實際部署後填入）
+- [x] 部署 Cloud Run；資料庫接 Cloud SQL（Postgres，`shortlink-db`，`asia-east1`，`db-f1-micro`）；
+  secrets 走 Secret Manager（`SECRET_KEY`/`DATABASE_URL`/四個 OAuth 憑證）
+- [x] 正式網域設定 OAuth callback + `CSRF_TRUSTED_ORIGINS`；跑 migration；`/livez` 正常
+- [x] README 補上部署 runbook 與服務網址欄位（服務網址：https://shortlink-ljrbbufbfq-de.a.run.app ）
 **完成定義**：以公開網址用 Google/FB 登入 → 建立短網址 → 造訪重導 → 看到點擊與來源 IP。**此時即可繳交。**
-**備註**：詳細 gcloud 指令清單見 README「部署到 Cloud Run」章節；關鍵決策見
-[`docs/adr/0005-cloud-run-deployment.md`](docs/adr/0005-cloud-run-deployment.md)。
+**✅ 已通過真人瀏覽器測試：Google、Facebook 皆登入成功，並完整跑過建立短網址 → 造訪重導 → 儀表板看到點擊數與來源 IP。**
+**備註**：
+- 詳細 gcloud 指令清單見 README「部署到 Cloud Run」章節；關鍵決策見
+  [`docs/adr/0005-cloud-run-deployment.md`](docs/adr/0005-cloud-run-deployment.md)
+- 部署過程踩到兩個坑，已修正並記錄：(1) Cloud Run 在共用 `*.run.app` 網域上把 `/healthz` 這個精確路徑
+  保留給自己內部使用，外部請求永遠連不到容器，把健康檢查端點改名成 `/livez`（見
+  [`docs/adr/0006-livez-not-healthz.md`](docs/adr/0006-livez-not-healthz.md)）；(2) Django 預設只在
+  `DEBUG=True` 時把例外印到 console，正式環境 `DEBUG=False` 又沒設 `ADMINS`，例外會被靜默吞掉，已在
+  `config/settings/prod.py` 加上 `LOGGING` 設定確保錯誤一定會進 Cloud Logging
+- Cloud Run 預設網域有新舊兩種格式同時生效（`https://shortlink-ljrbbufbfq-de.a.run.app` 新格式 /
+  `https://shortlink-642047376218.asia-east1.run.app` 舊格式），目前只在新格式那組設定了 OAuth
+  redirect URI 與 `CSRF_TRUSTED_ORIGINS`，**對外都只使用/分享新格式網址**，舊格式網址登入會因
+  `redirect_uri_mismatch` 失敗（已知行為，非 bug）
 
 ### Stage 4 — 效能（作者指定優先）　狀態：⬜
 **目標**：重導熱路徑與點擊寫入最佳化，並能用數據/`EXPLAIN` 講出來。
