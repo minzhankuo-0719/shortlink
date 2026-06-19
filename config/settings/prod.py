@@ -25,3 +25,23 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
 # Additional hardening (HSTS, CSP, etc.) is layered on in the polishing stage.
+
+# --- Logging -----------------------------------------------------------------
+# Django's own default LOGGING only sends to console when DEBUG=True; with
+# DEBUG=False it instead tries to email ADMINS, which we haven't configured,
+# so unhandled exceptions are silently dropped otherwise. Cloud Run captures
+# anything written to stdout/stderr into Cloud Logging automatically, so a
+# plain console handler is all that's needed to make 500s diagnosable.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
