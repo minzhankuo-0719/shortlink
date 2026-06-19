@@ -269,6 +269,99 @@ Stage 1 用 Django 內建的 `django.contrib.auth.urls`，登入頁的 URL name 
 
 ---
 
+## Stage 3 — 部署上 Cloud Run（踩坑紀錄）
+
+Stage 3 跟前面幾個 Stage 不太一樣：程式碼本身（Dockerfile、docker-compose、prod 設定）寫完、本機驗證
+過就大致底定了，真正花時間、真正學到東西的是**部署到真實 GCP 環境後的除錯過程**。這裡記錄三個有代表性
+的坑，都不是「程式碼邏輯寫錯」，而是平台層級的知識，下次遇到別的專案還會用得到。
+
+### 1. Cloud SQL 的 `db-f1-micro` 規格，新專案預設建不起來
+
+```bash
+gcloud sql instances create shortlink-db --database-version=POSTGRES_16 \
+  --tier=db-f1-micro --region=asia-east1 ...
+# ERROR: Invalid Tier (db-f1-micro) for (ENTERPRISE_PLUS) Edition.
+```
+
+GCP 把 Cloud SQL 分成新舊兩個 **edition**：較新、效能較強的 **Enterprise Plus**（新建 instance 現在
+預設用這個），跟較舊的 **Enterprise**。`db-f1-micro`/`db-g1-small` 這種「共享核心（shared-core）」
+低規格選項**只存在於 Enterprise edition**，Enterprise Plus 完全沒有這個量級的選項。解法是明確指定
+`--edition=ENTERPRISE`：
+
+```bash
+gcloud sql instances create shortlink-db --database-version=POSTGRES_16 \
+  --edition=ENTERPRISE --tier=db-f1-micro --region=asia-east1 ...
+```
+
+**學到的事**：GCP 的服務規格表會隨時間演進、預設值會換，官方文件/教學裡的指令不一定每次都能直接照搬，
+遇到 `Invalid Tier`/`Invalid Edition` 這類錯誤時，先假設是「平台規格變了」，去查最新的可選規格，而不是
+假設自己打錯字。
+
+### 2. Cloud Run 的健康檢查保留字（已有完整 ADR，這裡只記結論）
+
+`/healthz`（不帶斜線）在 Cloud Run 共用的 `*.run.app` 網域上被 Google Front End 保留給自己用，外部
+請求永遠連不到容器，回的是 Google 自己的通用 404，跟程式碼或部署設定無關。改名成 `/livez` 解決，完整
+排查過程（怎麼一步步排除 IAM、ingress、容器健康、快取等可能性，最後用 Cloud Run 的請求層級日誌
+`logName="...run.googleapis.com%2Frequests"` 鎖定問題）寫在
+[`docs/adr/0006-livez-not-healthz.md`](adr/0006-livez-not-healthz.md)。
+
+**學到的事**：懷疑「服務連不上」時，光看容器自己印的 stdout/stderr 不夠，**Cloud Run 有獨立的請求層級
+日誌**（跟應用程式日誌是不同的 `logName`），能直接告訴你「請求到底有沒有真正進到容器」，這個資訊比反覆
+猜測「是不是快取」「是不是還沒生效」更可靠，應該優先查。
+
+### 3. Django 正式環境預設會把例外靜默吞掉
+
+部署後首頁出現 500，但翻遍 Cloud Logging 找不到任何 traceback——因為 Django 的預設 `LOGGING` 設定裡，
+「印到 console」這個 handler 只在 `DEBUG=True` 時生效（`require_debug_true` 過濾器）；`DEBUG=False`
+時改成試著用 `mail_admins` 寄信通知，但沒設定 `ADMINS` 的話，這個 handler 直接靜默跳過，等於整個例外
+什麼痕跡都不留：
+
+```python
+# config/settings/prod.py
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO"},
+}
+```
+
+加上這段之後，Django 任何等級 `INFO` 以上的訊息（包括 500 的完整 traceback）都會印到 stderr，Cloud Run
+自動把 stdout/stderr 收進 Cloud Logging，不需要額外裝 Sentry 之類的服務就能看到錯誤（這個專案的規模，
+裝額外的錯誤追蹤服務是過度設計）。
+
+加上這段 `LOGGING` 之後，才在日誌裡看到真正的原因：把健康檢查端點從 `healthz` 改名成 `livez` 時，
+漏改了 `templates/core/home.html` 裡的 `{% url 'core:healthz' %}`，URL name 對不起來，
+`NoReverseMatch` 例外讓首頁整個 500。
+
+**學到的事**：**任何 Django 正式環境部署，沒有 `LOGGING` 設定形同沒有日誌**——這應該是部署 checklist
+的標準項目之一，不是出事才加。也順便驗證了「改名要找全部引用」這件事光用 `grep` 配合 IDE 的全文搜尋還是
+可能漏掉模板裡的 `{% url %}` 引用，改完後最好實際打一次首頁確認沒有 500。
+
+### 4. Cloud Run 預設網域有新舊兩種格式同時生效
+
+部署後 `gcloud run deploy` 印出的 `Service URL` 跟 `gcloud run services describe --format='value(status.url)'`
+查到的網址不一樣——前者印的是舊格式（`<service>-<project編號>.<region>.run.app`），後者才是 Google 認定的
+正式網址（新格式 `<service>-<隨機雜湊>-<地區代碼>.a.run.app`）。兩個網址**同時永久有效**，都指向同一個
+服務，是 Google 為了不讓舊書籤/舊整合失效而保留的相容性設計。
+
+這造成一個實際的坑：OAuth 的 redirect URI、`CSRF_TRUSTED_ORIGINS` 都只登記了其中一個網址，使用者如果用
+另一個網址訪問並嘗試登入，Google 會回 `redirect_uri_mismatch`——不是設定錯，是兩個網址裡只有一個被登記
+過。解法是**固定只對外公開、分享其中一個網址**（這個專案選用新格式那個），而不是想著兩個都要支援。
+
+**學到的事**：雲端平台的「預設網址」不一定是單一、穩定的字串，部署後第一件事是用
+`gcloud run services describe --format='value(status.url)'` 查出 Google 自己認定的正式網址，
+所有後續設定（OAuth、CORS、CSRF）都用這個查出來的值，不要直接複製貼上部署指令收尾印出的那行文字。
+
+### Stage 3 自我檢查題（答得出來才算懂）
+
+1. Cloud SQL 的 Enterprise 跟 Enterprise Plus edition 差在哪？為什麼 `db-f1-micro` 在新專案預設建不起來？
+2. `/healthz` 在 Cloud Run 上為什麼連不到？怎麼用日誌證明「請求根本沒進到容器」？
+3. Django 在 `DEBUG=False` 時，例外預設會去哪裡？為什麼沒設 `ADMINS` 等於沒有日誌？
+4. 為什麼 Cloud Run 的服務會有兩個網址？這對 OAuth/CSRF 設定有什麼影響？
+
+---
+
 ### Stage 0 自我檢查題（答得出來才算懂）
 
 1. Django 的 project 和 app 差在哪？

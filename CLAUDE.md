@@ -165,11 +165,15 @@ gcloud run deploy ...                     # 部署 Cloud Run（Stage 3 後）
   保留給自己內部使用，外部請求永遠連不到容器，把健康檢查端點改名成 `/livez`（見
   [`docs/adr/0006-livez-not-healthz.md`](docs/adr/0006-livez-not-healthz.md)）；(2) Django 預設只在
   `DEBUG=True` 時把例外印到 console，正式環境 `DEBUG=False` 又沒設 `ADMINS`，例外會被靜默吞掉，已在
-  `config/settings/prod.py` 加上 `LOGGING` 設定確保錯誤一定會進 Cloud Logging
+  `config/settings/prod.py` 加上 `LOGGING` 設定確保錯誤一定會進 Cloud Logging（見
+  [`docs/adr/0007-prod-logging-config.md`](docs/adr/0007-prod-logging-config.md)）
 - Cloud Run 預設網域有新舊兩種格式同時生效（`https://shortlink-ljrbbufbfq-de.a.run.app` 新格式 /
   `https://shortlink-642047376218.asia-east1.run.app` 舊格式），目前只在新格式那組設定了 OAuth
   redirect URI 與 `CSRF_TRUSTED_ORIGINS`，**對外都只使用/分享新格式網址**，舊格式網址登入會因
   `redirect_uri_mismatch` 失敗（已知行為，非 bug）
+- 完整踩坑紀錄（含 Cloud SQL edition/tier、Cloud Run 請求層級日誌怎麼查）寫在
+  [`docs/learning-log.md`](docs/learning-log.md) 的「Stage 3 — 部署上 Cloud Run（踩坑紀錄）」；
+  對應的面試問答見 [`docs/interview-qa.md`](docs/interview-qa.md) D1–D3
 
 ### Stage 4 — 效能（作者指定優先）　狀態：⬜
 **目標**：重導熱路徑與點擊寫入最佳化，並能用數據/`EXPLAIN` 講出來。
