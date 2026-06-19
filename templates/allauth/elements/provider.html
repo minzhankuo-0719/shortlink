@@ -1,6 +1,19 @@
+{% load allauth %}
 <li>
     <a title="{{ attrs.name }}" href="{{ attrs.href }}"
-       class="block w-full text-center border rounded px-4 py-2 text-sm font-medium hover:bg-gray-50">
-        {{ attrs.name }}
+       class="flex items-center justify-center gap-3 w-full border border-gray-300 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+        {% if attrs.provider_id == "google" %}
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.09-1.81 2.73v2.27h2.92c1.71-1.57 2.69-3.88 2.69-6.64z"/>
+                <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.81.54-1.85.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z"/>
+                <path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.97H.96A8.997 8.997 0 0 0 0 9c0 1.45.35 2.83.96 4.03l3.01-2.33z"/>
+                <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.97l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+            </svg>
+        {% elif attrs.provider_id == "facebook" %}
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                <path fill="#1877F2" d="M18 9a9 9 0 1 0-10.41 8.89v-6.29H5.31V9h2.28V7.02c0-2.25 1.34-3.49 3.39-3.49.96 0 1.97.17 1.97.17v2.17h-1.11c-1.1 0-1.44.68-1.44 1.38V9h2.45l-.39 2.6h-2.06v6.29A9 9 0 0 0 18 9z"/>
+            </svg>
+        {% endif %}
+        <span>{{ attrs.name }}</span>
     </a>
 </li>

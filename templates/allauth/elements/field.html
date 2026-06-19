@@ -17,7 +17,7 @@
                   {% if attrs.name %}name="{{ attrs.name }}"{% endif %}
                   {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
                   {% if attrs.placeholder %}placeholder="{{ attrs.placeholder }}"{% endif %}
-                  class="border rounded px-3 py-2 w-full">{% slot value %}{% endslot %}</textarea>
+                  class="border border-gray-300 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">{% slot value %}{% endslot %}</textarea>
     {% elif attrs.type == "checkbox" or attrs.type == "radio" %}
         <label class="flex items-center gap-2 text-sm" for="{{ attrs.id }}">
             <input {% if attrs.required %}required{% endif %}
@@ -42,7 +42,7 @@
                 {% if attrs.disabled %}disabled{% endif %}
                 {% if attrs.name %}name="{{ attrs.name }}"{% endif %}
                 {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
-                class="border rounded px-3 py-2 w-full">
+                class="border border-gray-300 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
             {% for option in attrs.choices %}
                 <option value="{{ option.0 }}" {% if option.0 == attrs.value %}selected{% endif %}>{{ option.1 }}</option>
             {% endfor %}
@@ -61,7 +61,7 @@
                {% if attrs.autocomplete %}autocomplete="{{ attrs.autocomplete }}"{% endif %}
                {% if attrs.value is not None %}value="{{ attrs.value }}"{% endif %}
                type="{{ attrs.type }}"
-               class="border rounded px-3 py-2 w-full">
+               class="border border-gray-300 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
     {% endif %}
     {% if slots.help_text %}
         <p class="text-xs text-gray-500 mt-1">
