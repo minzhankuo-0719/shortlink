@@ -36,11 +36,7 @@
         {% endfor %}
       </ul>
     {% endif %}
-    {# "page" lets a layout (e.g. allauth's entrance pages) wrap "content" in
-       its own chrome — a centered card — without touching "content" itself,
-       since allauth's own templates override "content" outright with no
-       {{ block.super }}, which would otherwise discard any wrapper placed
-       around it. Plain pages never override "page", so they're unaffected. #}
+    {# "page" lets a layout wrap "content" in its own chrome without colliding with templates that override "content" outright (no block.super). Plain pages never override "page", so they're unaffected. #}
     {% block page %}{% block content %}{% endblock %}{% endblock %}
   </main>
 </body>

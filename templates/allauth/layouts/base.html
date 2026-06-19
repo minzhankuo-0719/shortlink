@@ -1,12 +1,6 @@
 {% extends "base.html" %}
 
-{# allauth renders every account page (login, signup, logout, password
-   reset, social-account management, ...) through this one layout, so
-   overriding just this file (plus allauth/elements/*.html) styles all of
-   them consistently. Deliberately minimal: the "content" block is left for
-   account/login.html etc. to fill outright (they override it without
-   calling {{ block.super }}, so anything we put here would be discarded
-   anyway) — see docs/adr/0008-style-allauth-pages.md. #}
+{# allauth renders every account page through this one layout, so overriding it (plus allauth/elements/*.html) styles all of them consistently. Deliberately minimal — see docs/adr/0008-style-allauth-pages.md. #}
 
 {% block title %}{% block head_title %}{% endblock %} — ShortLink{% endblock %}
 
