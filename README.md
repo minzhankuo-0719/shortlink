@@ -2,7 +2,7 @@
 
 縮網址服務（面試作品）。用 Django 建立，支援 Google / Facebook 登入，登入後可建立短網址、造訪短網址會被重導到原始連結，並可在儀表板看到自己每條短網址的點擊成效與來源 IP。
 
-**服務網址**：_(部署後填入，例如 `https://shortlink-xxxx-asia-east1.run.app`)_
+**服務網址**：https://shortlink-ljrbbufbfq-de.a.run.app
 
 ## Tech Stack
 
