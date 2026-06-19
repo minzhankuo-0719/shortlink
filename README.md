@@ -25,7 +25,7 @@ uv run python manage.py createsuperuser    # 建立本機測試帳號（Stage 1 
 uv run python manage.py runserver          # 啟動本機伺服器
 ```
 
-打開 http://127.0.0.1:8000 看首頁，http://127.0.0.1:8000/healthz 看健康檢查。
+打開 http://127.0.0.1:8000 看首頁，http://127.0.0.1:8000/livez 看健康檢查。
 
 ### 開發工具
 
@@ -188,7 +188,7 @@ gcloud run domain-mappings create --service=shortlink --domain=<你的網域> --
 
 ### 10. 驗收
 
-- `curl https://<服務網址>/healthz` 回 `{"status": "ok"}`
+- `curl https://<服務網址>/livez` 回 `{"status": "ok"}`
 - 瀏覽器開服務網址 → 用 Google 或 Facebook 登入 → 建立短網址 → 造訪短網址確認重導成功 →
   回儀表板確認看到剛才那次造訪的點擊紀錄與來源 IP
 

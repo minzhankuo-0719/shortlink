@@ -86,7 +86,7 @@ path("", include("apps.core.urls")),   # 其他 → 轉接給 core 的路由表
 **`apps/core/urls.py`** — core 的路由：
 ```python
 path("", views.home, name="home"),
-path("healthz", views.healthz, name="healthz"),
+path("livez", views.livez, name="livez"),
 ```
 `name=...` 給網址取代號，模板用 `{% url 'core:home' %}` 產生網址，不寫死。
 
@@ -94,30 +94,32 @@ path("healthz", views.healthz, name="healthz"),
 ```python
 def home(request):
     return render(request, "core/home.html")   # 模板 → HTML
-def healthz(request):
+def livez(request):
     return JsonResponse({"status": "ok"})       # 直接回 JSON
 ```
-`healthz` 是**健康檢查端點**：上線後 Cloud Run 會定期戳它，回 200 代表服務活著，掛了就自動重啟。故意**不碰資料庫**，避免被慢的依賴拖垮。
+`livez` 是**健康檢查端點**：上線後可以定期戳它，回 200 代表服務活著，掛了就知道要處理。故意**不碰資料庫**，避免被慢的依賴拖垮。
 
 **`templates/`** — 畫面範本，用**模板繼承**：`base.html` 是共用外框並用 `{% block %}` 挖空，`home.html` 用 `{% extends %}` 繼承後只填自己的內容（共用部分只寫一次）。
 
 ---
 
-### 4. 用 `/healthz` 走一遍完整流程
+### 4. 用 `/livez` 走一遍完整流程
 
-打開 `網址/healthz`：
+打開 `網址/livez`：
 1. 請求到伺服器（本機 `runserver`），WSGI 翻成 `request` 物件。
 2. 經過 middleware。
-3. `config/urls.py` 看是 `/healthz` → 轉給 `apps/core/urls.py`。
-4. 比對到 `path("healthz", views.healthz)` → 呼叫 `healthz`。
+3. `config/urls.py` 看是 `/livez` → 轉給 `apps/core/urls.py`。
+4. 比對到 `path("livez", views.livez)` → 呼叫 `livez`。
 5. 回傳 `JsonResponse({"status": "ok"})`。
 6. Django 變成 HTTP 回應送回瀏覽器 → 看到 `{"status": "ok"}`。
 
 ---
 
-### 5. 為什麼叫 `healthz`（那個 z）
+### 5. 為什麼叫 `livez`（那個 z），不叫 `healthz`
 
-源自 **Google** 的命名慣例 **z-pages**（`/healthz`、`/statusz`、`/varz`…）。加 `z` 是為了**避免和真實業務網址撞名**，一看就知道是「給系統用的內部端點」。**Kubernetes** 把它標準化（`/healthz`、`/livez`、`/readyz`），成為雲端原生通用語。用 `/healthz` 能展現對 k8s/雲端慣例的熟悉（本職缺加分條件含 GKE）。
+源自 **Google** 的命名慣例 **z-pages**（`/healthz`、`/statusz`、`/varz`…）。加 `z` 是為了**避免和真實業務網址撞名**，一看就知道是「給系統用的內部端點」。**Kubernetes** 後來把這個合併語意的舊端點拆成更精確的兩個：`/livez`（存活檢查）跟 `/readyz`（就緒檢查），`/healthz` 變成比較舊、語意較模糊的版本。
+
+這個專案一開始也是叫 `/healthz`，部署到 Cloud Run 後才發現一個有趣的坑：**Cloud Run 在共用的 `*.run.app` 網域上，把完全比對 `/healthz` 這個路徑保留給自己內部的健康檢查機制，不會轉送到使用者的容器**——不管程式裡有沒有定義這個路由都一樣會被攔截在外層，回一個 Google 自己的通用 404 頁面，跟程式或部署設定完全無關，是平台層級的保留字。詳細排查過程跟為什麼選 `/livez` 而不是隨便換個名字，寫在 [`docs/adr/0006-livez-not-healthz.md`](adr/0006-livez-not-healthz.md)。
 
 ---
 
@@ -275,5 +277,5 @@ Stage 1 用 Django 內建的 `django.contrib.auth.urls`，登入頁的 URL name 
 4. 為什麼 settings 要分 base/dev/prod？
 5. 為什麼 `SECRET_KEY` 不直接寫在程式裡？
 6. WSGI 是什麼？為什麼需要它？
-7. `/healthz` 做什麼？為什麼故意不碰資料庫？為什麼叫 healthz？
+7. `/livez` 做什麼？為什麼故意不碰資料庫？為什麼叫 `/livez` 而不是 `/healthz`？
 8. 虛擬環境是什麼？`uv` 跟 `pip + venv` 差在哪？
