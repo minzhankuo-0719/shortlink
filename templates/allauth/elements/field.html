@@ -1,0 +1,72 @@
+{% load allauth %}
+<div class="mb-4">
+    {% if attrs.errors %}
+        {% for error in attrs.errors %}
+            <p class="text-red-600 text-sm mb-1">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+    {% if attrs.type == "textarea" %}
+        <label class="block text-sm mb-1" for="{{ attrs.id }}">
+            {% slot label %}
+            {% endslot %}
+        </label>
+        <textarea {% if attrs.required %}required{% endif %}
+                  {% if attrs.rows %}rows="{{ attrs.rows }}"{% endif %}
+                  {% if attrs.disabled %}disabled{% endif %}
+                  {% if attrs.readonly %}readonly{% endif %}
+                  {% if attrs.name %}name="{{ attrs.name }}"{% endif %}
+                  {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
+                  {% if attrs.placeholder %}placeholder="{{ attrs.placeholder }}"{% endif %}
+                  class="border rounded px-3 py-2 w-full">{% slot value %}{% endslot %}</textarea>
+    {% elif attrs.type == "checkbox" or attrs.type == "radio" %}
+        <label class="flex items-center gap-2 text-sm" for="{{ attrs.id }}">
+            <input {% if attrs.required %}required{% endif %}
+                   {% if attrs.disabled %}disabled{% endif %}
+                   {% if attrs.checked %}checked{% endif %}
+                   {% if attrs.name %}name="{{ attrs.name }}"{% endif %}
+                   {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
+                   {% if attrs.value is not None %}value="{{ attrs.value }}"{% endif %}
+                   type="{{ attrs.type }}"
+                   class="rounded border-gray-300">
+            {% slot label %}
+            {% endslot %}
+        </label>
+    {% elif attrs.type == "select" %}
+        {% if not attrs.unlabeled %}
+            <label class="block text-sm mb-1" for="{{ attrs.id }}">
+                {% slot label %}
+                {% endslot %}
+            </label>
+        {% endif %}
+        <select {% if attrs.required %}required{% endif %}
+                {% if attrs.disabled %}disabled{% endif %}
+                {% if attrs.name %}name="{{ attrs.name }}"{% endif %}
+                {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
+                class="border rounded px-3 py-2 w-full">
+            {% for option in attrs.choices %}
+                <option value="{{ option.0 }}" {% if option.0 == attrs.value %}selected{% endif %}>{{ option.1 }}</option>
+            {% endfor %}
+        </select>
+    {% else %}
+        <label class="block text-sm mb-1" for="{{ attrs.id }}">
+            {% slot label %}
+            {% endslot %}
+        </label>
+        <input {% if attrs.required %}required{% endif %}
+               {% if attrs.disabled %}disabled{% endif %}
+               {% if attrs.readonly %}readonly{% endif %}
+               {% if attrs.name %}name="{{ attrs.name }}"{% endif %}
+               {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
+               {% if attrs.placeholder %}placeholder="{{ attrs.placeholder }}"{% endif %}
+               {% if attrs.autocomplete %}autocomplete="{{ attrs.autocomplete }}"{% endif %}
+               {% if attrs.value is not None %}value="{{ attrs.value }}"{% endif %}
+               type="{{ attrs.type }}"
+               class="border rounded px-3 py-2 w-full">
+    {% endif %}
+    {% if slots.help_text %}
+        <p class="text-xs text-gray-500 mt-1">
+            {% slot help_text %}
+            {% endslot %}
+        </p>
+    {% endif %}
+</div>
