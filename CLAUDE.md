@@ -7,8 +7,8 @@
 
 ## 📍 目前進度（每次開工/收工都要更新這兩行）
 
-- **目前 Stage**：Stage 3 已完成並部署（Cloud Run，服務網址 https://shortlink-ljrbbufbfq-de.a.run.app ，Cloud SQL Postgres `asia-east1`/`db-f1-micro`、secrets 走 Secret Manager）。之後又做了一批 **Stage 3 之後的登入/UI 打磨（已在本機真人驗收，尚未重新部署到 Cloud Run）**：(1) 介面全英文 + 可切換 dark mode（手動切、記 localStorage）+ 按鈕 hover 改成陰影/變色（不上浮）；(2) **OpenAI 風格 email-first 登入入口**（`apps/accounts`，`/accounts/start/`）：填 email → 已註冊轉登入、未註冊轉註冊、純社群帳號轉「Continue with Google/Facebook」引導頁；(3) **跨 provider 自動連結**（同已驗證 email 用第二個 provider 登入會連到同一帳號；Facebook 設 `VERIFIED_EMAIL: True`）；(4) 修掉登入失敗時 non-field error 被吃掉、畫面無反應的 bug。決策見 [`docs/adr/0009-email-first-auth.md`](docs/adr/0009-email-first-auth.md)。
-- **下一步**：先把上述本機打磨**重新 build + 部署到 Cloud Run**（純模板/設定改動，gcloud 指令見 README，須作者本人執行），然後進入 Stage 4 — 效能（作者指定優先項）：重導走 Redis cache-aside、DB 索引 + `EXPLAIN` 分析、非同步寫入點擊、建立/重導加 rate limiting
+- **目前 Stage**：Stage 3 已完成並部署（Cloud Run，服務網址 https://shortlink-ljrbbufbfq-de.a.run.app ，Cloud SQL Postgres `asia-east1`/`db-f1-micro`、secrets 走 Secret Manager）。之後又做了一批 **Stage 3 之後的登入/UI 打磨（已在本機真人驗收，並已部署到 Cloud Run：revision `shortlink-00005`；線上 `/livez` 與 entrance 頁已驗證，提醒對外只用新格式網址 https://shortlink-ljrbbufbfq-de.a.run.app ，OAuth redirect URI 只設在這組）**：(1) 介面全英文 + 可切換 dark mode（手動切、記 localStorage）+ 按鈕 hover 改成陰影/變色（不上浮）；(2) **OpenAI 風格 email-first 登入入口**（`apps/accounts`，`/accounts/start/`）：填 email → 已註冊轉登入、未註冊轉註冊、純社群帳號轉「Continue with Google/Facebook」引導頁；(3) **跨 provider 自動連結**（同已驗證 email 用第二個 provider 登入會連到同一帳號；Facebook 設 `VERIFIED_EMAIL: True`）；(4) 修掉登入失敗時 non-field error 被吃掉、畫面無反應的 bug。決策見 [`docs/adr/0009-email-first-auth.md`](docs/adr/0009-email-first-auth.md)。**再來又做了一批登入/UX 打磨（本機真人驗收過，但「尚未部署」，線上仍是 revision `shortlink-00005`）**：(5) 社群登入按鈕改成 **POST**，跳過 allauth 的「Continue」中間確認頁（保留 CSRF 保護，而非關掉 `SOCIALACCOUNT_LOGIN_ON_GET`）；(6) signup 拿掉常駐的密碼規則 help text（4 個 `AUTH_PASSWORD_VALIDATORS` 照常作用，違規才出紅字）；(7) 移除登入頁「Forgot your password?」連結——無寄信基礎設施、密碼重設無法運作，且 app 是 social-login-first，移除入口好過保留會 500 的功能（reset URL 本身仍在，必要時可再擋）；(8) dev 改用 console email backend（忘記密碼不再 ConnectionRefused 500）。(5)(7) 透過 `CustomSignupForm`/`CustomLoginForm`（`ACCOUNT_FORMS`）實作；過程順手修掉一個回歸 bug：多行 `{# #}` 註解（單行限定）外漏成頁面文字，改用 `{% comment %}`。**Facebook 無法由 app 端強制「選帳號」（平台限制，靠無痕視窗）；Google 可選擇加 `prompt=select_account`（尚未做）。**
+- **下一步**：(a) 把這批打磨「部署上 Cloud Run」並真人驗收；(b) 進入 Stage 4 — 效能（作者指定優先項）：重導走 Redis cache-aside、DB 索引 + `EXPLAIN` 分析、非同步寫入點擊、建立/重導加 rate limiting
 
 狀態圖例：⬜ 未開始｜🟡 進行中｜✅ 完成
 
@@ -181,6 +181,8 @@ gcloud run deploy ...                     # 部署 Cloud Run（Stage 3 後）
 - [ ] DB 索引落實 + `EXPLAIN` 分析（SQL 訊號）；寫進 `docs/adr/`
 - [ ] **非同步寫入點擊**（不阻塞重導）；302 決策落地並記錄
 - [ ] 建立/重導加 **rate limiting**
+- [ ] **12-factor Concurrency**：調校 Gunicorn worker 數量（目前未特別設定，靠 Cloud Run 多實例擴展，行程內部還是單 worker）
+- [ ] **12-factor Admin processes**：`migrate` 改用獨立的 Cloud Run Job 跑，不要繼續放在 `entrypoint.sh` 跟著每個容器實例啟動時重複跑（目前的 race condition 取捨見 `entrypoint.sh` 註解）
 **完成定義**：重導命中快取免查 DB；有 before/after 量測或 `EXPLAIN` 說明；點擊記錄不影響重導延遲。
 
 ### Stage 5 — 測試 + CI/CD　狀態：⬜
