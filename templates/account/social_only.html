@@ -1,0 +1,28 @@
+{% extends "allauth/layouts/entrance.html" %}
+{% load allauth socialaccount %}
+
+{% block head_title %}Sign In{% endblock %}
+
+{% block content %}
+    {% element h1 %}
+        Welcome back
+    {% endelement %}
+    {% element p %}
+        You usually sign in to {{ email }} with a connected account. Continue below.
+    {% endelement %}
+
+    {% get_providers as socialaccount_providers %}
+    {% element provider_list %}
+        {% for provider in socialaccount_providers %}
+            {% if provider.id in account_providers %}
+                {% provider_login_url provider process="login" as href %}
+                {% element provider name="Continue with "|add:provider.name provider_id=provider.id href=href %}
+                {% endelement %}
+            {% endif %}
+        {% endfor %}
+    {% endelement %}
+
+    <p class="text-sm text-gray-500 text-center mt-4 dark:text-gray-400">
+        <a href="{% url 'account_entrance' %}" class="hover:underline">Use a different email</a>
+    </p>
+{% endblock %}

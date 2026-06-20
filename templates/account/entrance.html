@@ -1,0 +1,26 @@
+{% extends "allauth/layouts/entrance.html" %}
+{% load allauth %}
+
+{% block head_title %}Sign In{% endblock %}
+
+{% block content %}
+    {% element h1 %}
+        Sign in or create account
+    {% endelement %}
+
+    <form method="post" action="{% url 'account_entrance' %}" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm mb-1" for="{{ form.email.id_for_label }}">Email address</label>
+            {{ form.email }}
+            {% if form.email.errors %}
+                <p class="text-red-600 text-sm mt-1 dark:text-red-400">{{ form.email.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+        {% element button type="submit" %}
+            Continue
+        {% endelement %}
+    </form>
+
+    {% include "socialaccount/snippets/login.html" with page_layout="entrance" %}
+{% endblock %}

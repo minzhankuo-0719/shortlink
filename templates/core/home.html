@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}ShortLink — 縮網址服務{% endblock %}
+{% block title %}ShortLink — URL Shortener{% endblock %}
 
 {% block content %}
   <h1 class="text-2xl font-bold mb-2">ShortLink ✂️</h1>
-  <p class="text-gray-600 mb-4">Django 縮網址服務。登入後可以建立短網址，並看到每條短網址的點擊成效與來源 IP。</p>
-  <p class="text-sm text-gray-500 space-x-3">
+  <p class="text-gray-600 dark:text-gray-400 mb-4">A Django URL shortener. Sign in to create short links and see each link's click stats and source IPs.</p>
+  <p class="text-sm text-gray-500 dark:text-gray-500 space-x-3">
     <a href="{% url 'core:livez' %}" class="hover:underline">/livez</a>
     <a href="/admin/" class="hover:underline">/admin</a>
   </p>

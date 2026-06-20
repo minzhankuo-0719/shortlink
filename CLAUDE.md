@@ -7,8 +7,8 @@
 
 ## 📍 目前進度（每次開工/收工都要更新這兩行）
 
-- **目前 Stage**：Stage 3（✅ 完成；已部署到 Cloud Run，服務網址 https://shortlink-ljrbbufbfq-de.a.run.app ，資料庫接 Cloud SQL（Postgres,`asia-east1`,`db-f1-micro`），secrets 走 Secret Manager，Google/Facebook OAuth redirect URI 已補上正式網址，並通過真人瀏覽器完整驗收：登入（Google + Facebook）→ 建立短網址 → 造訪重導 → 儀表板看到點擊數與來源 IP）
-- **下一步**：進入 Stage 4 — 效能（作者指定優先項）：重導走 Redis cache-aside、DB 索引 + `EXPLAIN` 分析、非同步寫入點擊、建立/重導加 rate limiting
+- **目前 Stage**：Stage 3 已完成並部署（Cloud Run，服務網址 https://shortlink-ljrbbufbfq-de.a.run.app ，Cloud SQL Postgres `asia-east1`/`db-f1-micro`、secrets 走 Secret Manager）。之後又做了一批 **Stage 3 之後的登入/UI 打磨（已在本機真人驗收，尚未重新部署到 Cloud Run）**：(1) 介面全英文 + 可切換 dark mode（手動切、記 localStorage）+ 按鈕 hover 改成陰影/變色（不上浮）；(2) **OpenAI 風格 email-first 登入入口**（`apps/accounts`，`/accounts/start/`）：填 email → 已註冊轉登入、未註冊轉註冊、純社群帳號轉「Continue with Google/Facebook」引導頁；(3) **跨 provider 自動連結**（同已驗證 email 用第二個 provider 登入會連到同一帳號；Facebook 設 `VERIFIED_EMAIL: True`）；(4) 修掉登入失敗時 non-field error 被吃掉、畫面無反應的 bug。決策見 [`docs/adr/0009-email-first-auth.md`](docs/adr/0009-email-first-auth.md)。
+- **下一步**：先把上述本機打磨**重新 build + 部署到 Cloud Run**（純模板/設定改動，gcloud 指令見 README，須作者本人執行），然後進入 Stage 4 — 效能（作者指定優先項）：重導走 Redis cache-aside、DB 索引 + `EXPLAIN` 分析、非同步寫入點擊、建立/重導加 rate limiting
 
 狀態圖例：⬜ 未開始｜🟡 進行中｜✅ 完成
 

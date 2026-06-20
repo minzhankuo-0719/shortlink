@@ -48,6 +48,7 @@ THIRD_PARTY_APPS = [
     "allauth.socialaccount.providers.facebook",
 ]
 LOCAL_APPS = [
+    "apps.accounts",
     "apps.core",
     "apps.shortener",
     "apps.analytics",
@@ -138,7 +139,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Stage 1 used Django's built-in auth views; Stage 2 swaps the login flow to
 # allauth (Google/Facebook) without touching shortener/analytics — both still
 # just read `request.user`, set by whichever backend below authenticated them.
-LOGIN_URL = "account_login"  # allauth's URL name, not Django's built-in "login"
+LOGIN_URL = "account_entrance"  # our email-first entrance, not allauth's login
 LOGIN_REDIRECT_URL = "shortener:my_links"
 
 AUTHENTICATION_BACKENDS = [
@@ -154,6 +155,17 @@ ACCOUNT_LOGIN_METHODS = {"username", "email"}
 ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
 # No mail server configured yet, so don't require clicking a verification link.
 ACCOUNT_EMAIL_VERIFICATION = "none"
+
+# Account linking across providers by verified email. Without this, signing in
+# with Google and later with Facebook under the *same* email creates two
+# separate accounts (allauth's safe default). We turn it on because both of our
+# providers (Google, Facebook) verify the email they hand us, so "same verified
+# email == same person" is a claim we can trust: a social login whose verified
+# email matches an existing account logs into that account, and AUTO_CONNECT
+# links the new provider to it. Only safe with providers that verify email —
+# see docs/adr/0009-email-first-auth.md.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 
 def _oauth_app(client_id_var: str, secret_var: str) -> list[dict[str, str]]:
@@ -184,5 +196,14 @@ SOCIALACCOUNT_PROVIDERS = {
         "APPS": _oauth_app("FACEBOOK_OAUTH_CLIENT_ID", "FACEBOOK_OAUTH_CLIENT_SECRET"),
         "SCOPE": ["email", "public_profile"],
         "METHOD": "oauth2",
+        # Facebook's provider hard-codes the email as unverified because its
+        # Graph API exposes no reliable per-email "verified" signal (its
+        # `verified` field is about the *account*, not the email). We opt in to
+        # trusting it so that email-based account linking (see
+        # SOCIALACCOUNT_EMAIL_AUTHENTICATION) also works in the Facebook
+        # direction. Honoured via the adapter's is_email_verified() ->
+        # cleanup_email_addresses() "force verified" step. See
+        # docs/adr/0009-email-first-auth.md for the trust trade-off.
+        "VERIFIED_EMAIL": True,
     },
 }
