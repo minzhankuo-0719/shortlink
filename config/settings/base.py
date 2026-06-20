@@ -156,6 +156,15 @@ ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
 # No mail server configured yet, so don't require clicking a verification link.
 ACCOUNT_EMAIL_VERIFICATION = "none"
 
+# Swap in our own auth forms: the signup form drops the always-on password-rules
+# help text (validators still enforce on submit); the login form drops the
+# "Forgot your password?" link (no mail server to send a reset email). See
+# apps/accounts/forms.py.
+ACCOUNT_FORMS = {
+    "signup": "apps.accounts.forms.CustomSignupForm",
+    "login": "apps.accounts.forms.CustomLoginForm",
+}
+
 # Account linking across providers by verified email. Without this, signing in
 # with Google and later with Facebook under the *same* email creates two
 # separate accounts (allauth's safe default). We turn it on because both of our
