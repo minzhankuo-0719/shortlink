@@ -1,7 +1,10 @@
 {% load allauth %}
-{# Form-level (non-field) errors, e.g. allauth's "email/password incorrect".
-   Iterating the form below only yields per-field errors, so without this the
-   login failure message would have nowhere to render. #}
+{% comment %}
+    Form-level (non-field) errors, e.g. allauth's "email/password incorrect".
+    Iterating the form below only yields per-field errors, so without this the
+    login failure message would have nowhere to render. (Multi-line {% comment %}
+    not {# #}, which is single-line only and would otherwise leak as page text.)
+{% endcomment %}
 {% for error in attrs.form.non_field_errors %}
     <p class="text-red-600 text-sm mb-2 dark:text-red-400">{{ error }}</p>
 {% endfor %}
