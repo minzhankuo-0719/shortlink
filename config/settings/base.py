@@ -200,6 +200,7 @@ SOCIALACCOUNT_PROVIDERS = {
         "APPS": _oauth_app("GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"),
         "SCOPE": ["profile", "email"],
         "OAUTH_PKCE_ENABLED": True,
+        "AUTH_PARAMS": {"prompt": "select_account"},
     },
     "facebook": {
         "APPS": _oauth_app("FACEBOOK_OAUTH_CLIENT_ID", "FACEBOOK_OAUTH_CLIENT_SECRET"),
