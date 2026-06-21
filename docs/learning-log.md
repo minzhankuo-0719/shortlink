@@ -362,6 +362,105 @@ LOGGING = {
 
 ---
 
+## Stage 3 之後 — 登入打磨（逐項解說）
+
+> 這批不屬於某個正式 Stage，是 Stage 3 部署後針對登入/UX 的零碎打磨，挑兩個有「可重用觀念」的記下來。
+
+### 1. 讓 Google 每次登入都跳「選擇帳號」：`AUTH_PARAMS`
+
+需求是「點 Google 登入一定先出現帳號選擇畫面,方便換帳號」。這不是 allauth 的功能,而是 **OAuth 授權端點本身的參數** `prompt=select_account`——allauth 只負責把它原封不動轉發給 Google。allauth 轉發的管道就是 provider 設定裡的 `AUTH_PARAMS`:
+
+```python
+# config/settings/base.py
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": _oauth_app(...),          # 你是哪個 OAuth app(client_id/secret)
+        "SCOPE": ["profile", "email"],    # 你要跟對方拿什麼資料
+        "OAUTH_PKCE_ENABLED": True,
+        "AUTH_PARAMS": {"prompt": "select_account"},  # 你對授權端點下什麼指令
+    },
+}
+```
+
+兩個容易踩的點:
+
+- **`AUTH_PARAMS` 必須是 dict,不是字串**。allauth 會把它當成「鍵=值」一組組組成查詢字串接到授權網址後面;寫成 `"prompt=select_account"` 字串會壞掉。
+- **`prompt=select_account` 是 Google 專屬的**。Facebook 沒有等價參數,它的 `AUTH_PARAMS` 只吃 `auth_type`,而 `auth_type=reauthenticate` 的語意是「**重新輸入密碼確認本人**」,不是「換帳號」。所以 Facebook 想換帳號只能靠無痕視窗或先登出——這是平台限制,不是設定問題。
+
+**學到的事**:`SCOPE`(拿什麼資料)/ `AUTH_PARAMS`(對端點下什麼指令)/ `APPS`(你是誰)是三件不同的事;遇到「想調整 OAuth 行為」先想「這是不是供應商授權端點原生支援的參數」,是的話多半透過 `AUTH_PARAMS` 傳,而不是去 allauth 找開關。
+
+### 2. 只在 prod 把密碼重設頁擋成 404:用設定開關 + URL 覆寫
+
+prod 沒有 SMTP,allauth 的密碼重設流程一定寄不出信、直接 500;但 dev 設了 console email backend,本機還想留著它能用。需求因此是「**同一份程式,dev 可用、prod 回 404**」。做法分兩層:
+
+**(a) 一個明確的設定開關**,放在分層 settings 裡:
+
+```python
+# base.py — 常態預設(有 SMTP 的環境都能用)
+PASSWORD_RESET_ENABLED = True
+# prod.py — 唯一特例(沒 SMTP),覆寫成關
+PASSWORD_RESET_ENABLED = False
+# dev.py — 不用寫,from .base import * 會繼承 base 的 True
+```
+
+預設值放 base、特例環境覆寫,是分層設定的慣例:讀 code 的人看到 prod 那行 `False` 就懂「喔,prod 是因為沒 SMTP 才特別關」。
+
+**(b) 在 `config/urls.py` 用這個開關條件覆寫路由**。Django 的 URL 是**由上往下、先比中先贏**,所以把覆寫宣告在 `include("allauth.urls")` **之前**就會贏(專案的 `accounts/login/` 覆寫早就用了同一招):
+
+```python
+def _disabled(request, *args, **kwargs):
+    raise Http404  # 收 request + *args/**kwargs,因為 key URL 會帶 uidb36/key 進來
+
+_password_reset_overrides = []
+if not settings.PASSWORD_RESET_ENABLED:           # prod 才成立
+    _password_reset_overrides = [
+        path("accounts/password/reset/", _disabled),                 # 入口
+        re_path(r"^accounts/password/reset/key/(?P<uidb36>[0-9A-Za-z]+)-(?P<key>.+)/$",
+                _disabled),                                          # 信件 key 確認頁
+    ]
+
+urlpatterns = [
+    ...,
+    path("accounts/login/", account_views.PrefillLoginView.as_view()),
+    *_password_reset_overrides,                    # dev 是空 list,展開後等於沒東西
+    path("accounts/", include("allauth.urls")),
+    ...,
+]
+```
+
+幾個值得記的設計:
+- **空 list + `*` 解包**:dev 時 `_password_reset_overrides` 是 `[]`,`*[]` 攤平後什麼都沒有 → dev 完全不受影響;prod 才插入兩條覆寫。擋或不擋完全由「list 空不空」決定,而那由開關決定,一條邏輯線到底。
+- **`_disabled` 的簽名 `(request, *args, **kwargs)`**:key URL 的 regex 會擷取 `uidb36`/`key` 兩個具名參數,Django 呼叫 view 時會塞進來;不收 `**kwargs` 會 `TypeError`。
+- **只擋兩條功能性 URL**(入口 + key 確認頁),兩個 `.../done/` 純文字頁不擋——入口被擋就走不到,擋了只是雜訊。
+
+**怎麼驗證 dev/prod 兩種行為**(不用真的部署):用 Django test client + 臨時環境變數模擬:
+
+```bash
+# prod:強制讀 prod 設定,並補最小環境變數
+DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=dummy ALLOWED_HOSTS=testserver \
+  uv run python manage.py shell -c \
+  "from django.test import Client; print(Client().get('/accounts/password/reset/', secure=True).status_code)"   # 404
+
+# dev:test client 預設 Host 是 testserver,但 dev 的 ALLOWED_HOSTS 寫死了 localhost,要指定 Host
+uv run python manage.py shell -c \
+  "from django.test import Client; print(Client().get('/accounts/password/reset/', HTTP_HOST='localhost').status_code)"   # 200
+```
+
+這裡也順帶踩到兩個小坑:prod 的 `SECURE_SSL_REDIRECT=True` 會把 http 請求 301 轉 https,所以要 `secure=True` 才看得到真正的狀態碼;dev 的 `ALLOWED_HOSTS` 在 `dev.py` 寫死、不讀環境變數,test client 預設的 `testserver` 不在白名單會 400,要用 `HTTP_HOST='localhost'`。(平常跑 pytest 不會遇到這個,因為測試框架會自動把 `testserver` 加進白名單;這裡是手動用 `shell -c` 發請求才需要自己處理。)
+
+**學到的事**:「某功能只在某環境開/關」這種需求,乾淨解法是「設定層放一個有語意的布林開關 + 邏輯層讀它」,而不是在程式裡硬判斷 `if DEBUG` 或 `if 'prod' in ...`——開關有名字、有註解,意圖一眼就懂,未來多一個環境也只要決定那個布林。
+
+### Stage 3 之後 — 登入打磨 自我檢查題（答得出來才算懂）
+
+1. `AUTH_PARAMS` 為什麼要是 dict?它跟 `SCOPE` 的差別是什麼?
+2. 為什麼 `prompt=select_account` 對 Facebook 無效?`auth_type=reauthenticate` 又是做什麼的?
+3. `PASSWORD_RESET_ENABLED` 為什麼預設值放在 `base.py`、`dev.py` 不用寫?
+4. URL 覆寫為什麼一定要宣告在 `include("allauth.urls")` 之前?
+5. `_disabled(request, *args, **kwargs)` 為什麼要收 `*args, **kwargs`?
+6. 用 test client 驗 prod 時,為什麼要 `secure=True`、為什麼要設 `ALLOWED_HOSTS`?
+
+---
+
 ### Stage 0 自我檢查題（答得出來才算懂）
 
 1. Django 的 project 和 app 差在哪？
