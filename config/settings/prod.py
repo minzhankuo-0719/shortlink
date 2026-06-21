@@ -5,6 +5,10 @@ from .base import env
 
 DEBUG = False
 
+# No SMTP in production, so the password-reset flow can't deliver its email and
+# would just 500. Turn it off; config/urls.py then 404s the reset URLs.
+PASSWORD_RESET_ENABLED = False
+
 # Fail fast if the real secret key is not provided by the environment.
 SECRET_KEY = env("SECRET_KEY")
 

@@ -156,6 +156,11 @@ ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
 # No mail server configured yet, so don't require clicking a verification link.
 ACCOUNT_EMAIL_VERIFICATION = "none"
 
+# Whether allauth's password-reset flow is reachable. Reset emails need SMTP,
+# which only some environments have — prod (no mail server) turns this off and
+# config/urls.py 404s the reset URLs. Default on; dev inherits this.
+PASSWORD_RESET_ENABLED = True
+
 # Swap in our own auth forms: the signup form drops the always-on password-rules
 # help text (validators still enforce on submit); the login form drops the
 # "Forgot your password?" link (no mail server to send a reset email). See
