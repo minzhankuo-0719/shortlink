@@ -12,6 +12,10 @@ PASSWORD_RESET_ENABLED = False
 # Fail fast if the real secret key is not provided by the environment.
 SECRET_KEY = env("SECRET_KEY")
 
+# Require a real Redis in prod; without it CACHES would silently fall back to
+# per-process LocMemCache (low hit rate, invalidation not shared across instances).
+REDIS_URL = env("REDIS_URL")
+
 # ALLOWED_HOSTS and DATABASE_URL must come from the environment (see base.py).
 
 # Django's CSRF check compares the request's Origin header against this list
