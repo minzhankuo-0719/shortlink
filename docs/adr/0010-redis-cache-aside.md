@@ -57,3 +57,21 @@ cache-aside 的程式邏輯完全相同,只有後端不同。
 用 Django 內建測試框架(獨立測試 DB + `CaptureQueriesContext`)確認:首次解析 = 1 次
 DB 查詢、再次解析 = 0 次 DB 查詢;修改 URL 後訊號清快取、下次解析拿到新值;停用的連結
 解析回 `None`(走 404)。
+
+## 部署(實況)
+
+prod Redis 選 **Upstash**(serverless、免 VPC connector、free tier、GCP 東京
+`asia-northeast1`)。`rediss://` URL 放進 Secret Manager(`redis-url`),`gcloud run deploy
+--update-secrets REDIS_URL=redis-url:latest` 帶入;`prod.py` 加 `REDIS_URL = env("REDIS_URL")`
+(無 default)讓缺值時啟動即報錯,杜絕悄悄落回 LocMemCache。
+
+**踩坑**:Dockerfile 在 build 階段跑 `collectstatic`,而它 import 的是 `config.settings.prod`。
+prod 一旦多了「必填」的 `REDIS_URL`,build 就會因為環境沒這個變數而失敗(`ImproperlyConfigured`)。
+解法是在那行 `collectstatic` 加一個佔位 `REDIS_URL=redis://placeholder:6379`(跟既有的
+`SECRET_KEY`/`DATABASE_URL` 佔位同理)——collectstatic 不會真的連 Redis,佔位值也只存在於該行、
+不留進 image,執行期仍由 Secret Manager 注入真值。**通則:prod 每新增一個必填環境變數,記得同步
+更新 build-time 的佔位。**
+
+線上以 Upstash 後台確認確實走真 Redis:`Writes` 來自「建立連結的失效 `DEL`」+「cache miss 的
+`SET`」,`Reads` 來自「重導的 `GET`」+「redis-py 每條新連線的 handshake 指令」(Cloud Run scale-to-zero
+後冷啟動會重開連線,故指令數不與「建幾條/點幾次」1:1 對應)。
