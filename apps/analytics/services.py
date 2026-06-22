@@ -2,8 +2,6 @@
 
 from django.http import HttpRequest
 
-from apps.shortener.models import ShortLink
-
 from .models import Click
 
 
@@ -23,10 +21,15 @@ def get_client_ip(request: HttpRequest) -> str | None:
     return request.META.get("REMOTE_ADDR")
 
 
-def record_click(link: ShortLink, request: HttpRequest) -> Click:
-    """Record one visit to `link`'s redirect URL."""
+def record_click(link_id: int, request: HttpRequest) -> Click:
+    """Record one visit to a link, identified by id.
+
+    Takes link_id rather than a ShortLink instance so the redirect can log a
+    click straight from the cache-aside result (which carries only the id)
+    without loading the row. Django lets you set a FK by its raw id via `link_id`.
+    """
     return Click.objects.create(
-        link=link,
+        link_id=link_id,
         ip_address=get_client_ip(request),
         user_agent=request.META.get("HTTP_USER_AGENT", ""),
         referer=request.META.get("HTTP_REFERER", ""),

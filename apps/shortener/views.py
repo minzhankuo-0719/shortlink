@@ -1,13 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404, HttpRequest, HttpResponse
+from django.shortcuts import redirect, render
 
 from apps.analytics.services import record_click
 
 from .forms import ShortLinkForm
-from .models import ShortLink
-from .services import create_short_link
+from .services import create_short_link, resolve_active_link
 
 
 @login_required
@@ -40,11 +39,17 @@ def my_links(request: HttpRequest) -> HttpResponse:
 def redirect_short_link(request: HttpRequest, short_code: str) -> HttpResponse:
     """Resolve a short code and redirect to its destination, recording a Click.
 
+    The resolve step is cache-aside (Redis first, DB on a miss), so this hot
+    path usually avoids the database. See docs/adr/0010.
+
     Uses Django's default 302 (temporary) redirect rather than 301
     (permanent): a 301 gets cached by the browser, so the *second* visit
     never reaches this view again — and the click goes unrecorded. 302
     guarantees every visit hits the server. See docs/adr/0002.
     """
-    link = get_object_or_404(ShortLink, short_code=short_code, is_active=True)
-    record_click(link, request)
-    return redirect(link.original_url)
+    resolved = resolve_active_link(short_code)
+    if resolved is None:
+        raise Http404
+    link_id, original_url = resolved
+    record_click(link_id, request)
+    return redirect(original_url)
