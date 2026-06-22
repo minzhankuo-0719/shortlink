@@ -35,11 +35,12 @@ COPY --from=builder /app/.venv /app/.venv
 COPY . .
 
 # collectstatic only reads template/static sources and writes to STATIC_ROOT —
-# it never touches the database — so a throwaway SECRET_KEY/DATABASE_URL here
-# is safe and avoids depending on real secrets at build time.
+# it never touches the database or Redis — so throwaway placeholder values here
+# are safe and avoid depending on real secrets at build time.
 RUN SECRET_KEY=build-time-placeholder \
     DATABASE_URL=sqlite:///build.db \
     ALLOWED_HOSTS=localhost \
+    REDIS_URL=redis://placeholder:6379 \
     python manage.py collectstatic --noinput \
     && rm -f build.db
 
