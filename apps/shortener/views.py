@@ -10,8 +10,15 @@ from .services import create_short_link, resolve_active_link
 
 
 @login_required
-def create_link(request: HttpRequest) -> HttpResponse:
-    """Show the create-link form (GET) or create a link and redirect (POST)."""
+def my_links(request: HttpRequest) -> HttpResponse:
+    """Dashboard: the create form (shown in a modal) plus every link the user
+    owns, with click counts and recent clicks inline.
+
+    Handles the create POST here so the form can live on this page in a modal.
+    On success we redirect back (Post/Redirect/Get) so a refresh won't re-submit;
+    on a validation error we fall through and re-render, so the template can
+    re-open the modal with the errors shown.
+    """
     if request.method == "POST":
         form = ShortLinkForm(request.POST)
         if form.is_valid():
@@ -23,17 +30,11 @@ def create_link(request: HttpRequest) -> HttpResponse:
             return redirect("shortener:my_links")
     else:
         form = ShortLinkForm()
-    return render(request, "shortener/create.html", {"form": form})
 
-
-@login_required
-def my_links(request: HttpRequest) -> HttpResponse:
-    """Dashboard: every link the current user owns, with click counts and
-    the most recent clicks shown inline (no separate detail page yet)."""
     links = request.user.short_links.annotate(click_count=Count("clicks")).prefetch_related(
         "clicks"
     )
-    return render(request, "shortener/my_links.html", {"links": links})
+    return render(request, "shortener/my_links.html", {"links": links, "form": form})
 
 
 def redirect_short_link(request: HttpRequest, short_code: str) -> HttpResponse:

@@ -5,10 +5,52 @@
 {% block content %}
   <div class="flex items-center justify-between mb-4">
     <h1 class="text-xl font-bold">My Links</h1>
-    <a href="{% url 'shortener:create_link' %}" class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm transition-all duration-150 hover:bg-blue-700 hover:shadow-lg">
+    <button type="button" onclick="document.getElementById('create-modal').showModal()"
+            class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm transition-all duration-150 hover:bg-blue-700 hover:shadow-lg">
       + Create
-    </a>
+    </button>
   </div>
+
+
+  {% comment %} Create modal: native <dialog> gives the overlay, backdrop, Esc-to-close
+     and focus trap for free. Posts to this same page (see the my_links view).{% endcomment %}
+  <dialog id="create-modal"
+          class="w-full max-w-lg rounded-2xl bg-white p-0 backdrop:bg-black/50 dark:bg-neutral-900 dark:text-gray-100">
+    <form method="post" action="{% url 'shortener:my_links' %}" class="space-y-4 p-6">
+      {% csrf_token %}
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Create Short Link</h2>
+        <button type="button" onclick="document.getElementById('create-modal').close()"
+                aria-label="Close"
+                class="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">✕</button>
+      </div>
+      <div>
+        <label class="block text-sm mb-1" for="{{ form.original_url.id_for_label }}">Original URL</label>
+        {{ form.original_url }}
+        {% if form.original_url.errors %}
+          <p class="text-red-600 text-sm mt-1 dark:text-red-400">{{ form.original_url.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <div>
+        <label class="block text-sm mb-1" for="{{ form.title.id_for_label }}">Title (optional)</label>
+        {{ form.title }}
+        {% if form.title.errors %}
+          <p class="text-red-600 text-sm mt-1 dark:text-red-400">{{ form.title.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('create-modal').close()"
+                class="px-4 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">
+          Cancel
+        </button>
+        <button type="submit"
+                class="bg-blue-600 text-white px-4 py-2 rounded text-sm transition-all duration-150 hover:bg-blue-700 hover:shadow-lg">
+          Create
+        </button>
+      </div>
+    </form>
+  </dialog>
+
 
   {% if not links %}
     <p class="text-gray-500 dark:text-gray-400">No short links yet — click "+ Create" in the top right to make your first one.</p>
@@ -16,42 +58,146 @@
 
   <div class="space-y-4">
     {% for link in links %}
-      <div class="bg-white border rounded p-4 dark:bg-neutral-900 dark:border-neutral-800">
+      <div onclick="copyShortUrl(this)"
+           data-copy-url="{{ request.scheme }}://{{ request.get_host }}{% url 'shortener:redirect' link.short_code %}"
+           title="Click to copy the short URL"
+           class="bg-white border rounded p-4 cursor-pointer transition-all duration-150 hover:shadow-lg hover:border-gray-300 dark:bg-neutral-900 dark:border-neutral-800 dark:hover:border-neutral-600">
         <div class="flex items-center justify-between">
           <div>
-            <a href="{% url 'shortener:redirect' link.short_code %}" class="font-mono text-blue-700 hover:underline dark:text-blue-400">
-              /{{ link.short_code }}
-            </a>
-            {% if link.title %}<span class="text-gray-500 text-sm dark:text-gray-400">— {{ link.title }}</span>{% endif %}
+            <div class="flex items-center gap-2">
+              <a href="{% url 'shortener:redirect' link.short_code %}" target="_blank" rel="noopener noreferrer"
+                 onclick="event.stopPropagation()"
+                 class="font-mono text-blue-700 hover:underline dark:text-blue-400">
+                /{{ link.short_code }}
+              </a>
+              {% if link.title %}<span class="text-gray-500 text-sm dark:text-gray-400">— {{ link.title }}</span>{% endif %}
+            </div>
             <p class="text-sm text-gray-500 truncate dark:text-gray-400">{{ link.original_url }}</p>
           </div>
-          <div class="text-right text-sm text-gray-500 dark:text-gray-400">
-            <p>{{ link.click_count }} clicks</p>
-            <p>Created {{ link.created_at|date:"Y-m-d H:i" }}</p>
+          <div class="flex items-center gap-3">
+            <div class="text-right text-sm text-gray-500 dark:text-gray-400">
+              <p>{{ link.click_count }} clicks</p>
+              <p>Created {{ link.created_at|date:"Y-m-d H:i" }}</p>
+            </div>
           </div>
         </div>
-
-        {% with recent_clicks=link.clicks.all|slice:":5" %}
-          {% if recent_clicks %}
-            <table class="mt-3 w-full text-sm text-gray-600 border-t pt-2 dark:text-gray-300 dark:border-neutral-800">
-              <thead>
-                <tr class="text-left text-gray-400 dark:text-gray-500">
-                  <th class="pr-4 pt-2">Source IP</th>
-                  <th class="pt-2">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for click in recent_clicks %}
-                  <tr>
-                    <td class="pr-4">{{ click.ip_address|default:"—" }}</td>
-                    <td>{{ click.created_at|date:"Y-m-d H:i:s" }}</td>
+        {% if link.clicks.all %}
+          {% comment %}Recent-clicks preview (3 rows). The chevron swaps this for
+          a scrollable list of all clicks — see toggleClicks. Both blocks use
+          .nice-scroll so they reserve the same scrollbar gutter (no shift on
+          expand). The chevron sits in the relative wrapper, not in either block
+          (those swap visibility), so it stays put.{% endcomment %}
+          <div class="relative">
+            <div id="clicks-preview-{{ link.pk }}"
+                 class="nice-scroll mt-3 overflow-y-auto border-t pt-2 dark:border-neutral-800">
+              <table class="w-full text-sm text-gray-600 dark:text-gray-300">
+                <thead>
+                  <tr class="text-left text-gray-400 dark:text-gray-500">
+                    <th class="pr-4 pt-2">Source IP</th>
+                    <th class="pt-2">Time</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% endif %}
-        {% endwith %}
+                </thead>
+                <tbody>
+                  {% for click in link.clicks.all|slice:":3" %}
+                    <tr>
+                      <td class="pr-4">{{ click.ip_address|default:"—" }}</td>
+                      <td>{{ click.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            {% if link.click_count > 3 %}
+              <div id="clicks-full-{{ link.pk }}" onclick="event.stopPropagation()"
+                   class="hidden nice-scroll mt-3 max-h-72 overflow-y-auto border-t pt-2 dark:border-neutral-800">
+                <table class="w-full text-sm text-gray-600 dark:text-gray-300">
+                  <thead>
+                    <tr class="text-left text-gray-400 dark:text-gray-500">
+                      <th class="pr-4 pt-2">Source IP</th>
+                      <th class="pt-2">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for click in link.clicks.all %}
+                      <tr>
+                        <td class="pr-4">{{ click.ip_address|default:"—" }}</td>
+                        <td>{{ click.created_at|date:"Y-m-d H:i:s" }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <button type="button"
+                      onclick="event.stopPropagation(); toggleClicks('{{ link.pk }}', this)"
+                      aria-label="Show all clicks"
+                      class="absolute right-1 top-3 text-gray-400 transition-transform duration-150 hover:text-gray-700 dark:hover:text-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+                </svg>
+              </button>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
     {% endfor %}
+
   </div>
+
+  {% if form.errors %}
+    {% comment %}A submit failed validation: re-open the modal so the user sees the errors
+       instead of a silently-closed dialog.{% endcomment %}
+    <script>document.getElementById('create-modal').showModal()</script>
+  {% endif %}
+
+  <script>
+    function copyShortUrl(card) {
+      // Clipboard API needs https or localhost — both our dev (127.0.0.1) and
+      // the Cloud Run site satisfy that. Confirm with a brief toast.
+      navigator.clipboard.writeText(card.dataset.copyUrl).then(function () {
+        const toast = document.getElementById("copy-toast");
+        toast.classList.remove("hidden");
+        clearTimeout(window._copyToastTimer);
+        window._copyToastTimer = setTimeout(function () {
+          toast.classList.add("hidden");
+        }, 1500);
+      });
+    }
+
+    function toggleClicks(pk, btn) {
+      // Swap the 5-row preview for the full scrollable list (and back), and
+      // flip the chevron to point up while expanded.
+      document.getElementById("clicks-preview-" + pk).classList.toggle("hidden");
+      document.getElementById("clicks-full-" + pk).classList.toggle("hidden");
+      btn.classList.toggle("rotate-180");
+    }
+  </script>
+
+
+  <div id="copy-toast"
+       class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-gray-900 px-4 py-2 text-sm text-white shadow-lg dark:bg-white dark:text-black">
+    Copied to clipboard
+  </div>
+
+  <style>
+    /* Thin, rounded, subtle scrollbar for the click lists. scrollbar-gutter
+       reserves the bar's space so the table doesn't shift when it appears, and
+       both preview and expanded list reserve it equally (no jump on expand). */
+    .nice-scroll {
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;                                  /* Firefox */
+      scrollbar-color: rgba(156, 163, 175, 0.5) transparent; /* Firefox: thumb / track */
+    }
+    .nice-scroll::-webkit-scrollbar { width: 8px; }
+    .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+    .nice-scroll::-webkit-scrollbar-thumb {
+      background-color: rgba(156, 163, 175, 0.5);
+      border-radius: 9999px;
+    }
+    .nice-scroll::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(107, 114, 128, 0.7);
+    }
+  </style>
+
 {% endblock %}

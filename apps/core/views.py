@@ -1,10 +1,16 @@
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+
+from apps.accounts.forms import EmailFirstForm
 
 
 def home(request: HttpRequest) -> HttpResponse:
-    """Landing page."""
-    return render(request, "core/home.html")
+    """Landing page for anonymous visitors; logged-in users go to their dashboard."""
+    if request.user.is_authenticated:
+        return redirect("shortener:my_links")
+    # Embed the same email-first form the entrance uses, right on the landing
+    # page, so a visitor can start signing in without an extra click.
+    return render(request, "core/home.html", {"form": EmailFirstForm()})
 
 
 def livez(request: HttpRequest) -> JsonResponse:

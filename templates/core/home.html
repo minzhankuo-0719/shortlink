@@ -1,12 +1,35 @@
 {% extends "base.html" %}
+{% load allauth %}
 
 {% block title %}ShortLink — URL Shortener{% endblock %}
 
 {% block content %}
-  <h1 class="text-2xl font-bold mb-2">ShortLink ✂️</h1>
-  <p class="text-gray-600 dark:text-gray-400 mb-4">A Django URL shortener. Sign in to create short links and see each link's click stats and source IPs.</p>
-  <p class="text-sm text-gray-500 dark:text-gray-500 space-x-3">
-    <a href="{% url 'core:livez' %}" class="hover:underline">/livez</a>
-    <a href="/admin/" class="hover:underline">/admin</a>
-  </p>
+  <div class="max-w-md mx-auto">
+    {# Hero #}
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold mb-2">ShortLink ✂️</h1>
+      <p class="text-gray-600 dark:text-gray-400">
+        Shorten any URL, then track its clicks and source IPs.
+      </p>
+    </div>
+
+    {# Sign-in card: the email-first entrance, embedded on the landing page. #}
+    <div class="bg-white border border-gray-200 rounded-3xl p-9 shadow-sm dark:bg-neutral-900 dark:border-neutral-800">
+      <h2 class="text-lg font-semibold mb-4 text-center">Sign in or create account</h2>
+
+      <form method="post" action="{% url 'account_entrance' %}" class="space-y-4">
+        {% csrf_token %}
+        <div>
+          <label class="block text-sm mb-1" for="{{ form.email.id_for_label }}">Email address</label>
+          {{ form.email }}
+        </div>
+        {% element button type="submit" %}
+          Continue
+        {% endelement %}
+      </form>
+
+      {# Google / Facebook — the same POST snippet the entrance page uses. #}
+      {% include "socialaccount/snippets/login.html" %}
+    </div>
+  </div>
 {% endblock %}
