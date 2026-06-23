@@ -53,13 +53,49 @@ docker compose exec web python manage.py createsuperuser
 > 帳號）。指令裡的 `PROJECT_ID`、`INSTANCE_CONNECTION_NAME` 等請替換成你自己的值。Region 統一用
 > `asia-east1`（台灣彰化）。
 
+### 本專案實際使用的值（照抄前先核對）
+
+| 項目 | 值 |
+|---|---|
+| PROJECT_ID | `shortlink-499808`（專案編號 `642047376218`） |
+| Region | `asia-east1` |
+| Artifact Registry repo | `shortlink`（Docker，`asia-east1`） |
+| Image path | `asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest` |
+| Cloud Run service | `shortlink` |
+| 服務網址（對外只用這個） | https://shortlink-ljrbbufbfq-de.a.run.app |
+| 正式環境 Redis | Upstash serverless（secret `redis-url`） |
+
+> ⚠️ README 第 0–10 步是**第一次從零部署**用的。日常「只改了程式碼」的重新部署，照下面這段就好，不要重跑 0–10。
+
+### 重新部署（只改了程式碼，沒動 secret/env 時）
+
+```bash
+cd /Users/kevin/大橡科技                         # ← 一定要在專案目錄（含 Dockerfile）裡跑，否則 build 會說「Dockerfile required」
+git commit -am "<你的訊息>"                       # 先把要部署的程式碼進版，讓線上 image 對得回某個 commit
+
+# 1) build + push（注意是 shortlink-499808，不是 shortlink-demo）
+gcloud builds submit --tag asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest .
+
+# 2) 只換 image 部署。不要帶 --set-secrets / --set-env-vars：
+#    那兩個是「整組覆蓋」，漏列任何一個（例如 REDIS_URL）就會把線上既有設定洗掉，
+#    而 prod.py 缺 REDIS_URL 會啟動即報錯。只給 --image 會沿用上一版的所有 secret/env。
+gcloud run deploy shortlink \
+  --image=asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest \
+  --region=asia-east1
+
+# 3) 驗證容器有正常起來（= 設定有被繼承）
+curl -s https://shortlink-ljrbbufbfq-de.a.run.app/livez   # 應回 {"status": "ok"}
+```
+
+**踩過的三個坑（已寫進上面）**：① 不在專案目錄跑 → `Dockerfile required`；② image path 用錯專案（`shortlink-demo`）→ push 被 `denied`；③ 重新部署誤帶 `--set-secrets` 漏了 `REDIS_URL` → 會洗掉線上 Redis 設定、容器起不來。
+
 ### 0. 安裝 gcloud、建立專案
 
 ```bash
 # 安裝：https://cloud.google.com/sdk/docs/install
 gcloud init                                            # 登入並選好 region
-gcloud projects create shortlink-demo --name="ShortLink"
-gcloud config set project shortlink-demo
+gcloud projects create shortlink-499808 --name="ShortLink"   # 本專案實際使用的 PROJECT_ID（GCP 專案 ID 全域唯一，重建請自行換一個）
+gcloud config set project shortlink-499808
 # 到 https://console.cloud.google.com/billing 把這個專案連到你的帳單帳戶（有 $300 免費額度）
 ```
 
@@ -117,37 +153,42 @@ echo -n "<你的 GOOGLE_OAUTH_CLIENT_ID>" | gcloud secrets create google-oauth-c
 echo -n "<你的 GOOGLE_OAUTH_CLIENT_SECRET>" | gcloud secrets create google-oauth-client-secret --data-file=-
 echo -n "<你的 FACEBOOK_OAUTH_CLIENT_ID>" | gcloud secrets create facebook-oauth-client-id --data-file=-
 echo -n "<你的 FACEBOOK_OAUTH_CLIENT_SECRET>" | gcloud secrets create facebook-oauth-client-secret --data-file=-
+
+# REDIS_URL：正式環境用 Upstash serverless Redis（免 VPC connector）。到 https://upstash.com
+# 開一個 Redis（provider 選 GCP、region 盡量挑離 asia-east1 近的），複製它給的 rediss:// 連線字串。
+# prod.py 設成「缺 REDIS_URL 就啟動報錯」，所以這條一定要建（見 docs/adr/0010）。
+printf '%s' '<貼上 Upstash 的 rediss:// 連線字串>' | gcloud secrets create redis-url --data-file=-
 ```
 
 ### 5. 授權 Cloud Run 的服務帳號
 
 ```bash
-PROJECT_NUMBER=$(gcloud projects describe shortlink-demo --format='value(projectNumber)')
+PROJECT_NUMBER=$(gcloud projects describe shortlink-499808 --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
-gcloud projects add-iam-policy-binding shortlink-demo \
+gcloud projects add-iam-policy-binding shortlink-499808 \
   --member="serviceAccount:${SA}" --role="roles/secretmanager.secretAccessor"
-gcloud projects add-iam-policy-binding shortlink-demo \
+gcloud projects add-iam-policy-binding shortlink-499808 \
   --member="serviceAccount:${SA}" --role="roles/cloudsql.client"
 ```
 
 ### 6. Build + push image
 
 ```bash
-gcloud builds submit --tag asia-east1-docker.pkg.dev/shortlink-demo/shortlink/web:latest .
+gcloud builds submit --tag asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest .
 ```
 
 ### 7. 部署 Cloud Run
 
 ```bash
 gcloud run deploy shortlink \
-  --image=asia-east1-docker.pkg.dev/shortlink-demo/shortlink/web:latest \
+  --image=asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest \
   --region=asia-east1 \
   --platform=managed \
   --allow-unauthenticated \
   --min-instances=0 --max-instances=2 \
   --add-cloudsql-instances="${INSTANCE_CONNECTION_NAME}" \
-  --set-secrets="SECRET_KEY=django-secret-key:latest,DATABASE_URL=database-url:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,FACEBOOK_OAUTH_CLIENT_ID=facebook-oauth-client-id:latest,FACEBOOK_OAUTH_CLIENT_SECRET=facebook-oauth-client-secret:latest" \
+  --set-secrets="SECRET_KEY=django-secret-key:latest,DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,FACEBOOK_OAUTH_CLIENT_ID=facebook-oauth-client-id:latest,FACEBOOK_OAUTH_CLIENT_SECRET=facebook-oauth-client-secret:latest" \
   --set-env-vars="DJANGO_SETTINGS_MODULE=config.settings.prod,ALLOWED_HOSTS=.run.app"
 ```
 
