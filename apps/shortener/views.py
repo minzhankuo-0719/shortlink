@@ -1,11 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.analytics.services import record_click
 
 from .forms import ShortLinkForm
+from .models import ShortLink
 from .services import create_short_link, resolve_active_link
 
 
@@ -31,9 +32,12 @@ def my_links(request: HttpRequest) -> HttpResponse:
     else:
         form = ShortLinkForm()
 
-    links = request.user.short_links.annotate(click_count=Count("clicks")).prefetch_related(
-        "clicks"
+    links = (
+        request.user.short_links.annotate(click_count=Count("clicks"))
+        .prefetch_related("clicks")
+        .order_by("-created_at")  # newest first; explicit because annotate() drops Meta.ordering
     )
+
     return render(request, "shortener/my_links.html", {"links": links, "form": form})
 
 
@@ -54,3 +58,17 @@ def redirect_short_link(request: HttpRequest, short_code: str) -> HttpResponse:
     link_id, original_url = resolved
     record_click(link_id, request)
     return redirect(original_url)
+
+
+@login_required
+def delete_link(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete one of the current user's links.
+
+    POST-only and owner-scoped: get_object_or_404 filters by owner, so a user
+    can never delete a link they don't own (they get a 404 instead). The
+    post_delete signal clears the Redis cache entry, so the code stops resolving.
+    """
+    link = get_object_or_404(ShortLink, pk=pk, owner=request.user)
+    if request.method == "POST":
+        link.delete()
+    return redirect("shortener:my_links")
