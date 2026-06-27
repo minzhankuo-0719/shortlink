@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
+from django.db.models.functions import Lower
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -8,6 +9,13 @@ from apps.analytics.services import record_click
 from .forms import ShortLinkForm
 from .models import ShortLink
 from .services import create_short_link, resolve_active_link
+
+_SORT_OPTIONS = {
+    "newest": ("-created_at",),
+    "oldest": ("created_at",),
+    "popular": ("-click_count", "-created_at"),
+    "title": (Lower("title"), "-created_at"),
+}
 
 
 @login_required
@@ -32,13 +40,20 @@ def my_links(request: HttpRequest) -> HttpResponse:
     else:
         form = ShortLinkForm()
 
+    sort_key = request.GET.get("sort")
+    if sort_key not in _SORT_OPTIONS:
+        sort_key = "newest"
+    sort_order = _SORT_OPTIONS[sort_key]
+
     links = (
         request.user.short_links.annotate(click_count=Count("clicks"))
         .prefetch_related("clicks")
-        .order_by("-created_at")  # newest first; explicit because annotate() drops Meta.ordering
+        .order_by(*sort_order)  # explicit order_by because annotate() drops Meta.ordering
     )
 
-    return render(request, "shortener/my_links.html", {"links": links, "form": form})
+    return render(
+        request, "shortener/my_links.html", {"links": links, "form": form, "current_sort": sort_key}
+    )
 
 
 def redirect_short_link(request: HttpRequest, short_code: str) -> HttpResponse:
@@ -72,3 +87,25 @@ def delete_link(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == "POST":
         link.delete()
     return redirect("shortener:my_links")
+
+
+@login_required
+def edit_link(request: HttpRequest, pk: int) -> HttpResponse:
+    """Edit a link's title and destination URL.
+
+    Owner-scoped via get_object_or_404 (you can only edit your own links;
+    anyone else gets a 404 — same guard as delete_link). ShortLinkForm is
+    bound to the existing instance, so GET pre-fills the current values and
+    save() updates that row instead of creating a new one. The post_save
+    signal clears the Redis cache, so a changed URL takes effect immediately.
+    See docs/adr/0011.
+    """
+    link = get_object_or_404(ShortLink, pk=pk, owner=request.user)
+    if request.method == "POST":
+        form = ShortLinkForm(request.POST, instance=link)
+        if form.is_valid():
+            form.save()
+            return redirect("shortener:my_links")
+    else:
+        form = ShortLinkForm(instance=link)
+    return render(request, "shortener/edit_link.html", {"form": form, "link": link})

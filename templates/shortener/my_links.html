@@ -4,7 +4,30 @@
 
 {% block content %}
   <div class="flex items-center justify-between mb-4">
-    <h1 class="text-xl font-bold">My Links</h1>
+    <div class="flex items-center gap-3">
+      <h1 class="text-lg font-semibold">My Links</h1>
+
+      {% comment %} Sort dropdown: native <details>/<summary> is a button that toggles a
+         menu with zero JS. Each option is a link that swaps the ?sort= query param;
+         navigating reloads the page, which closes the menu. current_sort (from the view)
+         marks the active option. {% endcomment %}
+      <details class="relative">
+        <summary class="flex cursor-pointer select-none items-center gap-1.5 rounded px-2 py-1 text-sm text-gray-600 transition-colors duration-150 hover:bg-gray-100 list-none dark:text-gray-300 dark:hover:bg-neutral-800 [&::-webkit-details-marker]:hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M3 12h12M3 18h6" />
+          </svg>
+          Sort by
+        </summary>
+
+        <div class="absolute left-0 z-10 mt-2 w-max overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+          <a href="?sort=newest" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-neutral-800 {% if current_sort == 'newest' %}font-semibold text-blue-600 dark:text-blue-400{% endif %}">Newest</a>
+          <a href="?sort=oldest" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-neutral-800 {% if current_sort == 'oldest' %}font-semibold text-blue-600 dark:text-blue-400{% endif %}">Oldest</a>
+          <a href="?sort=popular" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-neutral-800 {% if current_sort == 'popular' %}font-semibold text-blue-600 dark:text-blue-400{% endif %}">Most popular</a>
+          <a href="?sort=title" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-neutral-800 {% if current_sort == 'title' %}font-semibold text-blue-600 dark:text-blue-400{% endif %}">Title (A–Z)</a>
+        </div>
+      </details>
+    </div>
+
     <button type="button" onclick="document.getElementById('create-modal').showModal()"
             class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm transition-all duration-150 hover:bg-blue-700 hover:shadow-lg">
       + Create
@@ -12,10 +35,12 @@
   </div>
 
 
+
+
   {% comment %} Create modal: native <dialog> gives the overlay, backdrop, Esc-to-close
      and focus trap for free. Posts to this same page (see the my_links view).{% endcomment %}
   <dialog id="create-modal"
-          class="w-full max-w-lg rounded-2xl bg-white p-0 backdrop:bg-black/50 dark:bg-neutral-900 dark:text-gray-100">
+          class="fixed inset-0 m-auto h-fit w-full max-w-lg rounded-2xl bg-white p-0 backdrop:bg-black/50 dark:bg-neutral-900 dark:text-gray-100">
     <form method="post" action="{% url 'shortener:my_links' %}" class="space-y-4 p-6">
       {% csrf_token %}
       <div class="flex items-center justify-between">
@@ -51,6 +76,46 @@
     </form>
   </dialog>
 
+  {% comment %} Edit modals: one per link, rendered here at the top level of the page —
+     the same DOM depth as the Create modal — so they share its centering context (a
+     nested <dialog> inside the list ends up positioned differently). Each is opened by
+     its card's pencil button via showModal(). {% endcomment %}
+  {% for link in links %}
+    <dialog id="edit-modal-{{ link.pk }}"
+            class="fixed inset-0 m-auto h-fit w-full max-w-lg rounded-2xl bg-white p-0 backdrop:bg-black/50 dark:bg-neutral-900 dark:text-gray-100">
+      <form method="post" action="{% url 'shortener:edit' link.pk %}" class="space-y-4 p-6">
+        {% csrf_token %}
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold">Edit Short Link</h2>
+          <button type="button" onclick="this.closest('dialog').close()" aria-label="Close"
+                  class="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">✕</button>
+        </div>
+        <div>
+          <label class="block text-sm mb-1" for="edit-url-{{ link.pk }}">Original URL</label>
+          <input type="url" name="original_url" id="edit-url-{{ link.pk }}" required
+                 value="{{ link.original_url }}" placeholder="https://example.com/..."
+                 class="border rounded px-3 py-2 w-full dark:bg-neutral-800 dark:border-neutral-700 dark:text-gray-100 dark:placeholder-gray-500">
+        </div>
+        <div>
+          <label class="block text-sm mb-1" for="edit-title-{{ link.pk }}">Title (optional)</label>
+          <input type="text" name="title" id="edit-title-{{ link.pk }}"
+                 value="{{ link.title }}" placeholder="Give this link a name (optional)"
+                 class="border rounded px-3 py-2 w-full dark:bg-neutral-800 dark:border-neutral-700 dark:text-gray-100 dark:placeholder-gray-500">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="this.closest('dialog').close()"
+                  class="px-4 py-2 rounded text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="bg-blue-600 text-white px-4 py-2 rounded text-sm transition-all duration-150 hover:bg-blue-700 hover:shadow-lg">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+  {% endfor %}
+
 
   {% if not links %}
     <p class="text-gray-500 dark:text-gray-400">No short links yet — click "+ Create" in the top right to make your first one.</p>
@@ -79,6 +144,16 @@
               <p>{{ link.click_count }} clicks</p>
               <p>Created {{ link.created_at|date:"Y-m-d H:i" }}</p>
             </div>
+            {% comment %} Edit: opens this link's edit modal (defined just after the card).
+            stopPropagation so it doesn't trigger the card's copy-to-clipboard. {% endcomment %}
+            <button type="button"
+                    onclick="event.stopPropagation(); document.getElementById('edit-modal-{{ link.pk }}').showModal()"
+                    aria-label="Edit link" title="Edit"
+                    class="text-gray-400 transition-colors duration-150 hover:text-blue-600 dark:hover:text-blue-400">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+              </svg>
+            </button>
             {% comment %} Delete: a CSRF-protected POST form. stopPropagation so the
             click doesn't trigger the card's copy-to-clipboard; confirm() guards
             against accidental deletes. {% endcomment %}
@@ -187,6 +262,19 @@
       document.getElementById("clicks-full-" + pk).classList.toggle("hidden");
       btn.classList.toggle("rotate-180");
     }
+
+    // Native <details> doesn't close when you click outside it. Listen on the
+    // whole document: for every open <details>, if the click landed *outside*
+    // it, close it. Clicking its own summary/menu is "inside", so it's left
+    // alone (the summary still toggles normally; an option link still navigates).
+    document.addEventListener("click", function (event) {
+      document.querySelectorAll("details[open]").forEach(function (details) {
+        if (!details.contains(event.target)) {
+          details.removeAttribute("open");
+        }
+      });
+    });
+
   </script>
 
 

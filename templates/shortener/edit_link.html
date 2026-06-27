@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Link — ShortLink{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-lg">
+    <h1 class="text-lg font-semibold">Edit Link</h1>
+    <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+      Editing <span class="font-mono">/{{ link.short_code }}</span>
+    </p>
+
+    <form method="post" action="{% url 'shortener:edit' link.pk %}"
+          class="space-y-4 rounded-2xl border bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
+      {% csrf_token %}
+
+      {% comment %} Non-field errors (e.g. a form-wide problem) so they aren't swallowed. {% endcomment %}
+      {% if form.non_field_errors %}
+        <p class="text-sm text-red-600 dark:text-red-400">{{ form.non_field_errors|join:", " }}</p>
+      {% endif %}
+
+      <div>
+        <label class="mb-1 block text-sm" for="{{ form.original_url.id_for_label }}">Original URL</label>
+        {{ form.original_url }}
+        {% if form.original_url.errors %}
+          <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.original_url.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="mb-1 block text-sm" for="{{ form.title.id_for_label }}">Title (optional)</label>
+        {{ form.title }}
+        {% if form.title.errors %}
+          <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.title.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <a href="{% url 'shortener:my_links' %}"
+           class="rounded px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800">
+          Cancel
+        </a>
+        <button type="submit"
+                class="rounded bg-blue-600 px-4 py-2 text-sm text-white transition-all duration-150 hover:bg-blue-700 hover:shadow-lg">
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+{% endblock %}
