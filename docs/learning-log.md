@@ -471,3 +471,51 @@ uv run python manage.py shell -c \
 6. WSGI 是什麼？為什麼需要它？
 7. `/livez` 做什麼？為什麼故意不碰資料庫？為什麼叫 `/livez` 而不是 `/healthz`？
 8. 虛擬環境是什麼？`uv` 跟 `pip + venv` 差在哪？
+
+---
+
+## OAuth 對外開放：Facebook go-Live、商家驗證、加測試者的眉角（踩坑紀錄）
+
+把 app「讓任何人都能登入」時踩到的一連串平台限制集中記在這。完整決策見
+[`docs/adr/0012-facebook-public-profile-only.md`](adr/0012-facebook-public-profile-only.md)。
+
+### 1. Meta 現在「發佈 (go Live)」一律要商家驗證——連 public_profile only 也擋
+
+原本以為「`email` 才要商家驗證 (BV)、`public_profile` 自動有進階存取所以免 BV 即可切 Live」。實測發現
+**新版後台把商家驗證列為「發佈」的必要條件**，只留 `public_profile` 也照擋：發佈頁的「發佈」鈕灰色、
+提示「由於未完成所有要求，因此無法發佈這款應用程式」。把 use case 裡的 `email` 移除、把卡片上掛的未驗證
+商家也「移除」都沒用，BV 要求依舊在。**結論：FB 要對任意人開放 = 一定要做商家驗證，沒有別的路。**
+
+### 2. 對外開放改靠 Google（非敏感範圍免驗證）
+
+Google 的 `profile`+`email` 屬**非敏感範圍**，把 OAuth 同意畫面從 Testing **發布成 In production** 即可，
+**不需要**商家/企業驗證（非敏感範圍無 100 人上限、不跳「未驗證應用程式」）。所以最終：對外開放交給 Google，
+Facebook 維持開發模式 + 測試者名單。
+
+### 3. 加「真人測試者」的順序眉角（這次最容易卡的地方）
+
+- 加真人走 **App Roles → 角色 (Roles) → 測試人員 (Testers)**，**不是**底下的「測試用戶 (Test Users)」——
+  那是 FB 產生的**假帳號**，不是真人。
+- 加人要用對方**個人檔案網址 `facebook.com/<username>` 裡的 username**；打中文顯示名字會回
+  `does not resolve to a valid user ID`。
+- **順序很重要（重點）**：被加的人要**先**有一個免費的 Meta/Facebook 開發者帳號，**你再把他加進測試者**，
+  他**才收得到邀請通知**。**順序反過來（人還不是開發者就先加他）→ 通知不會出現、對方接不到。** 正確順序：
+  1. 被加者先到 `developers.facebook.com` **註冊開發者帳號**（同意條款、做完帳號驗證）；
+  2. 你才到 App Roles → 角色 → 測試人員 用 username 把他加進來；
+  3. 他在 **FB 通知鈴鐺** 或登入 `developers.facebook.com` 接受邀請。
+- 開發者帳號驗證會要**手機或信用卡**；若手機號碼已綁在別的 Meta 帳號，會出現
+  「You can only complete this action in Accounts Center」——換一支沒綁過的號碼、或改用信用卡驗證。
+
+### 4. 其他相關的擋登入畫面
+
+- 非測試者用 FB 登入 → Facebook 顯示「**應用程式並非使用中**」（app 在開發模式、只有角色能登入），非本站 bug。
+- 從 **Messenger / LINE / IG 內建瀏覽器** 點連結用 Google 登入 → `403 disallowed_useragent`
+  （Google 禁止在 in-app WebView 跑 OAuth）；要改用 Safari/Chrome 真瀏覽器。
+
+### OAuth 對外開放 自我檢查題（答得出來才算懂）
+
+1. 為什麼「只留 `public_profile`」仍然無法免商家驗證切 Live？BV 這道牆卡在哪一步？
+2. 「任何人都能登入」為什麼能靠 Google 達成、卻不能靠 Facebook？Google 非敏感範圍跟 FB 進階存取差在哪？
+3. 加真人測試者時，為什麼一定要對方**先**有開發者帳號？順序反了會發生什麼事？
+4. 加測試者為什麼要用 username 而不是顯示名字？
+5. 「測試人員 (Testers)」跟「測試用戶 (Test Users)」差在哪？
