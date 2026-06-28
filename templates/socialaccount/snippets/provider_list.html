@@ -1,0 +1,27 @@
+{% comment %}
+Project override of allauth's socialaccount/snippets/provider_list.html.
+
+allauth's {% get_providers %} sorts providers alphabetically by name, which
+puts "Facebook" before "Google". We want Google on top and Facebook below, so
+we iterate the list in reverse (with only these two providers, reversed yields
+Google, Facebook). Everything else is copied verbatim from allauth so the POST
+login buttons and the openid branch keep working.
+{% endcomment %}
+{% load allauth socialaccount %}
+{% get_providers as socialaccount_providers %}
+{% if socialaccount_providers %}
+    {% element provider_list %}
+        {% for provider in socialaccount_providers reversed %}
+            {% if provider.id == "openid" %}
+                {% for brand in provider.get_brands %}
+                    {% provider_login_url provider openid=brand.openid_url process=process as href %}
+                    {% element provider name=brand.name provider_id=provider.id href=href %}
+                    {% endelement %}
+                {% endfor %}
+            {% endif %}
+            {% provider_login_url provider process=process scope=scope auth_params=auth_params as href %}
+            {% element provider name=provider.name provider_id=provider.id href=href %}
+            {% endelement %}
+        {% endfor %}
+    {% endelement %}
+{% endif %}
