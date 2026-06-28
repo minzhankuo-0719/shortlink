@@ -1,12 +1,19 @@
 {% extends "base.html" %}
 {% load allauth %}
+{% load static %}
 
 {% block title %}ShortLink — URL Shortener{% endblock %}
+
+{# Landing page: hide the nav brand — the hero below already shows the logo. #}
+{% block nav_brand %}{% endblock %}
 
 {% block content %}
   <div class="max-w-md mx-auto">
     <div class="text-center mb-8">
-      <h1 class="text-3xl font-bold mb-2">ShortLink 🔗</h1>
+      <h1 class="text-3xl font-bold mb-2 flex items-center justify-center gap-2">
+        <img src="{% static 'shortlink.png' %}" alt="" class="h-9 w-9">
+        <span>ShortLink</span>
+      </h1>
       <p class="text-gray-600 dark:text-gray-400">
         Shorten any URL, then track its clicks and source IPs.
       </p>
