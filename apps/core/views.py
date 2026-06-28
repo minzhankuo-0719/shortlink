@@ -27,3 +27,13 @@ def livez(request: HttpRequest) -> JsonResponse:
     cannot be taken down by a slow dependency.
     """
     return JsonResponse({"status": "ok"})
+
+
+def privacy(request: HttpRequest) -> HttpResponse:
+    """Privacy policy + data-deletion instructions (public, no auth, no DB).
+
+    Required to take the Facebook app Live — Facebook asks for a public
+    Privacy Policy URL and data-deletion instructions — and linked from the
+    Google/Facebook OAuth consent screens.
+    """
+    return render(request, "core/privacy.html")

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy — ShortLink{% endblock %}
+
+{% block content %}
+  <article class="space-y-6 leading-relaxed text-gray-700 dark:text-gray-300">
+    <header>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Privacy Policy</h1>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Last updated: June 28, 2026</p>
+    </header>
+
+    <p>
+      ShortLink is a personal URL-shortening project. This page explains what data it
+      collects, how that data is used, and how you can have it deleted. By signing in and
+      using the service you agree to this policy.
+    </p>
+
+    <section class="space-y-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Information we collect</h2>
+      <ul class="list-disc space-y-1 pl-6">
+        <li>
+          <strong>Account information.</strong> When you sign in with Google or Facebook, we
+          receive your name and email address from that provider. If you register with a
+          username and password instead, we store your username and email.
+        </li>
+        <li>
+          <strong>Links you create.</strong> The destination URLs and optional titles of the
+          short links you make.
+        </li>
+        <li>
+          <strong>Click analytics.</strong> When someone visits one of your short links, we
+          record the visit's IP address, browser user-agent, referring page, and timestamp,
+          so we can show you click statistics.
+        </li>
+      </ul>
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">How we use it</h2>
+      <p>
+        We use this data only to operate the service: to authenticate you, to redirect short
+        links to their destinations, and to show you the click analytics for your own links.
+        We do not sell your data or use it for advertising.
+      </p>
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Third-party services</h2>
+      <p>We rely on a few third parties to run the service:</p>
+      <ul class="list-disc space-y-1 pl-6">
+        <li><strong>Google</strong> and <strong>Facebook</strong> — sign-in (OAuth). Their own privacy policies govern the data they hold.</li>
+        <li><strong>Google Cloud</strong> — application hosting and database.</li>
+        <li><strong>Upstash</strong> — caching (Redis).</li>
+      </ul>
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Data retention</h2>
+      <p>
+        Your links and their click history are kept until you delete them or delete your
+        account. Deleting a link removes it and its click history.
+      </p>
+    </section>
+
+    <section id="data-deletion" class="space-y-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">How to delete your data</h2>
+      <ul class="list-disc space-y-1 pl-6">
+        <li>
+          <strong>Delete a single link (and its clicks):</strong> open your dashboard
+          (<em>My Links</em>) and click the trash icon on that link.
+        </li>
+        <li>
+          <strong>Delete your entire account and all associated data:</strong> email us at
+          the address below from the address on your account and we will permanently delete
+          your account, your links, and their click history.
+        </li>
+      </ul>
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Contact</h2>
+      <p>
+        Questions or data-deletion requests:
+        <a href="mailto:minzhankuo@gmail.com" class="text-blue-700 hover:underline dark:text-blue-400">minzhankuo@gmail.com</a>
+      </p>
+    </section>
+  </article>
+{% endblock %}
