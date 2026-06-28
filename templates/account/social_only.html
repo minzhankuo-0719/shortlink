@@ -13,7 +13,8 @@
 
     {% get_providers as socialaccount_providers %}
     {% element provider_list %}
-        {% for provider in socialaccount_providers %}
+        {% comment %}allauth sorts providers alphabetically (Facebook, Google); reverse so Google sits on top, matching the main login screen.{% endcomment %}
+        {% for provider in socialaccount_providers reversed %}
             {% if provider.id in account_providers %}
                 {% provider_login_url provider process="login" as href %}
                 {% element provider name="Continue with "|add:provider.name provider_id=provider.id href=href %}
