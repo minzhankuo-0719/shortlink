@@ -167,10 +167,11 @@ Visitor → GET /<short_code>
   collide and couldn't give the same URL different codes per user.
 - **302, not 301.** A `301 Moved Permanently` gets cached by the browser, so the *second* visit never
   reaches the server and the click goes unrecorded. A `302` guarantees every visit is counted.
-- **Real client IP behind a proxy.** Cloud Run sits in front of the app, so the redirect reads the first
-  address in `X-Forwarded-For` (falling back to `REMOTE_ADDR` when there's no proxy, e.g. locally). The
-  header is only trusted because a proxy we control overwrites any client-supplied value — it would
-  otherwise be spoofable.
+- **Real client IP behind a proxy.** Cloud Run's front end appends the true client IP as the *last*
+  `X-Forwarded-For` entry (verified against the live service), so the redirect reads the **last** entry —
+  not the left-most, which a client can forge. Values a visitor injects land to the left and are ignored,
+  and a malformed header is validated away to `NULL` instead of crashing the redirect. `REMOTE_ADDR` is
+  only the no-proxy (local) fallback.
 - **Cache-aside with signal-based invalidation.** Resolved short codes are cached in Redis (TTL 1h). A
   `post_save` / `post_delete` signal on `ShortLink` clears the cache entry, so creates, edits, and
   deletes take effect immediately — invalidation lives in one place and can't be forgotten at a call
@@ -199,8 +200,11 @@ deploy time; nothing sensitive is baked into the image.
 - **Admin disabled in production.** Django's `/admin/` is a high-privilege, well-known target for
   scanners and brute-force, so it isn't mounted in prod (env-gated by `ENABLE_ADMIN`) and returns 404
   there; it stays available locally for data management.
-- **Trusted client IP.** `X-Forwarded-For` is honoured only because Cloud Run's proxy overwrites any
-  client-supplied value, so the recorded source IP can't be spoofed.
+- **Un-spoofable client IP.** The source IP is read from the *last* `X-Forwarded-For` entry — the one
+  Google's front end appends — so values a client injects (which land to its left) are ignored, and a
+  malformed header is validated away to `NULL` rather than crashing the redirect.
+- **Rate limiting.** Redirects and link creation are throttled per real client IP (django-ratelimit over
+  Redis), returning `429 Too Many Requests` past the limit to blunt scraping and mass-creation abuse.
 - **No third-party runtime scripts.** In production Tailwind is compiled to a small, purged stylesheet
   at image-build time (Tailwind standalone CLI → WhiteNoise) instead of being loaded from a CDN, so no
   external origin can execute script on the page. Dev keeps the zero-config CDN for fast iteration.
