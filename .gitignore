@@ -24,4 +24,11 @@ db.sqlite3-journal
 # Claude Code local settings (personal, not shared)
 .claude/settings.local.json
 
+# Personal notes kept local only — out of version control to keep the repo's
+# current view clean (git history still has them). deployment.md stays tracked.
+CLAUDE.md
+docs/adr/
+docs/interview-qa.md
+docs/learning-log.md
+
 # Note: uv.lock IS committed (reproducible builds).
