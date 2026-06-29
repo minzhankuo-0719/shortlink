@@ -15,6 +15,7 @@ _SORT_OPTIONS = {
     "oldest": ("created_at",),
     "popular": ("-click_count", "-created_at"),
     "title": (Lower("title"), "-created_at"),
+    "title_desc": (Lower("title").desc(), "-created_at"),
 }
 
 
