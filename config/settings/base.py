@@ -29,6 +29,11 @@ SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-only-change-me")
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
+# Whether to mount Django's admin site (config/urls.py). The admin is a
+# high-privilege, well-known endpoint that bots scan and brute-force, so prod
+# turns it OFF (see prod.py). Dev/local keep it on for convenience.
+ENABLE_ADMIN = env.bool("ENABLE_ADMIN", default=True)
+
 # --- Applications -----------------------------------------------------------
 # Grouped so it is obvious which apps are Django's, which are third-party, and
 # which are ours. Our apps live under the `apps/` package.

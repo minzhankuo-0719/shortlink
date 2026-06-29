@@ -32,7 +32,22 @@ SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
-# Additional hardening (HSTS, CSP, etc.) is layered on in the polishing stage.
+# --- HSTS --------------------------------------------------------------------
+# Tell browsers to only ever reach this site over HTTPS for the next year, so a
+# network attacker can't downgrade a visitor to plain HTTP (SSL stripping).
+# SECURE_SSL_REDIRECT above upgrades any stray HTTP request; HSTS makes the
+# browser skip HTTP entirely on the next visit. Safe here because Cloud Run
+# serves HTTPS only — there is no HTTP endpoint to lose.
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# Don't expose the Django admin in production. The admin is a high-privilege,
+# well-known endpoint (/admin/) that bots routinely scan and brute-force; with
+# no admin route mounted there's nothing to attack. Set ENABLE_ADMIN=true in
+# the environment to turn it back on temporarily when managing prod data.
+# (CSP is intentionally deferred — see the security roadmap in the README.)
+ENABLE_ADMIN = env.bool("ENABLE_ADMIN", default=False)
 
 # --- Logging -----------------------------------------------------------------
 # Django's own default LOGGING only sends to console when DEBUG=True; with

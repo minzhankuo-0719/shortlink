@@ -29,7 +29,6 @@ if not settings.PASSWORD_RESET_ENABLED:
     ]
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
     # OpenAI-style email-first entrance: the single front door for signing in
     # (LOGIN_URL points here). It routes to the password login or signup based
     # on whether the email is already registered.
@@ -54,3 +53,10 @@ urlpatterns = [
     path("", include("apps.core.urls")),
     path("", include("apps.shortener.urls")),
 ]
+
+# Django's admin is a high-privilege, well-known target for scanners and
+# brute-force. Only mount /admin/ when explicitly enabled — off in prod by
+# default (settings.ENABLE_ADMIN), so there's no admin login form to attack.
+# Prepended so /admin/ resolves before the catch-all short-code route.
+if settings.ENABLE_ADMIN:
+    urlpatterns.insert(0, path("admin/", admin.site.urls))
