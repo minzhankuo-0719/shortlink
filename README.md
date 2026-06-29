@@ -201,9 +201,11 @@ deploy time; nothing sensitive is baked into the image.
   there; it stays available locally for data management.
 - **Trusted client IP.** `X-Forwarded-For` is honoured only because Cloud Run's proxy overwrites any
   client-supplied value, so the recorded source IP can't be spoofed.
+- **No third-party runtime scripts.** In production Tailwind is compiled to a small, purged stylesheet
+  at image-build time (Tailwind standalone CLI → WhiteNoise) instead of being loaded from a CDN, so no
+  external origin can execute script on the page. Dev keeps the zero-config CDN for fast iteration.
 
-**Hardening roadmap:** self-host Tailwind via its build-time CLI to drop the runtime CDN dependency,
-then layer on a Content-Security-Policy once inline scripts are removed.
+**Hardening roadmap:** add a Content-Security-Policy once the remaining inline scripts are refactored out.
 
 ---
 
