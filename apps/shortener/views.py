@@ -3,8 +3,9 @@ from django.db.models import Count
 from django.db.models.functions import Lower
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django_ratelimit.decorators import ratelimit
 
-from apps.analytics.services import record_click
+from apps.analytics.services import client_ip_ratelimit_key, record_click
 
 from .forms import ShortLinkForm
 from .models import ShortLink
@@ -20,6 +21,7 @@ _SORT_OPTIONS = {
 
 
 @login_required
+@ratelimit(key=client_ip_ratelimit_key, rate="30/m", method="POST", block=True)
 def my_links(request: HttpRequest) -> HttpResponse:
     """Dashboard: the create form (shown in a modal) plus every link the user
     owns, with click counts and recent clicks inline.
@@ -57,6 +59,7 @@ def my_links(request: HttpRequest) -> HttpResponse:
     )
 
 
+@ratelimit(key=client_ip_ratelimit_key, rate="100/m", block=True)
 def redirect_short_link(request: HttpRequest, short_code: str) -> HttpResponse:
     """Resolve a short code and redirect to its destination, recording a Click.
 

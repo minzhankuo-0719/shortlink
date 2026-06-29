@@ -75,6 +75,8 @@ MIDDLEWARE = [
     # allauth needs to inspect/modify the request on every view, e.g. to
     # surface its messages and handle its account-related redirects.
     "allauth.account.middleware.AccountMiddleware",
+    # Render django-ratelimit's block as 429 Too Many Requests (not 403).
+    "apps.core.middleware.RatelimitTo429Middleware",
 ]
 
 ROOT_URLCONF = "config.urls"
