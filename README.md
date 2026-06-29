@@ -1,241 +1,219 @@
-# ShortLink
+<img src="shortlink_github.png" align="left" width="150" hspace="24" vspace="8" alt="ShortLink logo"/>
 
-縮網址服務（面試作品）。用 Django 建立，支援 Google / Facebook 登入，登入後可建立短網址、造訪短網址會被重導到原始連結，並可在儀表板看到自己每條短網址的點擊成效與來源 IP。
+*URL shortener · Google / Facebook social login · click analytics*
 
-**服務網址**：https://shortlink-ljrbbufbfq-de.a.run.app
+**Live:** https://shortlink-ljrbbufbfq-de.a.run.app
 
-## Tech Stack
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
+[![Django 5.2](https://img.shields.io/badge/django-5.2-092E20.svg)](https://www.djangoproject.com/)
+[![uv](https://img.shields.io/badge/package%20manager-uv-DE5FE9)](https://docs.astral.sh/uv/)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-336791.svg)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/cache-Redis-DC382D.svg)](https://redis.io/)
+[![Tailwind CSS](https://img.shields.io/badge/styles-Tailwind%20CSS-38BDF8.svg)](https://tailwindcss.com/)
+[![Deploy: Cloud Run](https://img.shields.io/badge/deploy-Cloud%20Run-4285F4.svg)](https://shortlink-ljrbbufbfq-de.a.run.app)
+[![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-D97757)](https://claude.com/claude-code)
 
-- **Python 3.13 + Django 5.2 (LTS)**，套件管理用 **uv**
-- **PostgreSQL**（本機/Docker，正式環境用 Cloud SQL）
-- **django-allauth**（Google / Facebook OAuth）
-- **HTMX + Tailwind CSS**（模板導向、低 JS）
-- **DRF**（REST API，分析儀表板用）
-- **ruff**（lint + format）+ **pre-commit**
+<br clear="left"/>
 
-完整技術選型與決策見 [`CLAUDE.md`](CLAUDE.md) 與 [`docs/adr/`](docs/adr/)。
+---
 
-## Quickstart（本機開發）
+## Contents
+
+- [Project Overview](#project-overview) — what this project does
+- [Demo & Verification](#demo--verification) — live URL + how to test it
+- [Getting Started](#getting-started) — clone, install, run locally
+- [Deployment](#deployment) — how it's hosted
+- [Implementation](#implementation) — architecture + key decisions
+- [Project Structure](#project-structure) — repo layout
+
+---
+
+## Project Overview
+
+> ShortLink turns any long URL into a short, shareable code, then records analytics every time that code
+> is visited. Authentication is social-login-first (Google / Facebook), and each user only ever sees and
+> manages their own links.
+
+| Feature | What it does |
+|---|---|
+| **Create short links** | Signed-in users shorten any URL; each gets a random 7-character base62 code |
+| **Social login** | Sign in with **Google** or **Facebook** (OAuth via django-allauth); classic username / password also works |
+| **Cross-provider account linking** | Signing in with Google and later Facebook under the same verified email lands you in the *same* account instead of a duplicate |
+| **Fast redirects** | Visiting a short link issues a `302` redirect and records the visit; the lookup is cached in Redis, so the hot path usually skips the database |
+| **Per-link click analytics** | For every link: total click count plus each visit's **source IP**, user agent, referer, and time |
+| **Dashboard** | One page to create (in a modal), edit, and delete links; sort by newest / oldest / most-clicked / title; expand a link inline to see its click history; click a card to copy its short URL |
+| **Dark mode** | Manual toggle, remembered across visits |
+
+---
+
+## Demo & Verification
+
+### Demo
+
+<video src="https://github.com/minzhankuo-0719/shortlink/raw/main/docs/media/shortlink-demo.mp4" controls width="800"></video>
+
+_End-to-end demo — sign in with Google, shorten a URL, visit it, and watch the click land on the dashboard with its source IP._
+
+### Try it yourself
+
+**Live URL:** https://shortlink-ljrbbufbfq-de.a.run.app
+
+1. Open the live URL **in a real browser** (Safari / Chrome / Edge).
+2. Sign in with **Google** (no allowlist — anyone can).
+3. Create a short link from a long URL.
+4. Open the short link → it redirects to the destination.
+5. Back on the dashboard, expand the link to see the click you just made, with its source IP.
+
+> ⚠️ **Use a real browser, not an in-app one.** Don't open the live URL from inside a messaging app's
+> built-in browser (Messenger / Facebook / Instagram / LINE in-app WebView). Google's policy blocks
+> OAuth inside in-app WebViews and returns `403 disallowed_useragent`. This is a Google policy, not a bug
+> in this app — if you hit it, open the link in Safari or Chrome instead.
+
+> 🔑 **Facebook login is limited to testers.** Meta now requires Business Verification to take an app
+> fully live, which is overkill for a personal portfolio project, so the Facebook app stays in
+> development mode and only accounts added as **testers** can log in with Facebook. To try Facebook
+> login you'll need a free Facebook developer account and an invite — feel free to email me. **Google
+> login has no such limit and works for anyone.**
+
+---
+
+## Getting Started
+
+**Prerequisites:** Python ≥ 3.13, [uv](https://docs.astral.sh/uv/)
+(install: `curl -LsSf https://astral.sh/uv/install.sh | sh`), and optionally Docker (only for the
+prod-like stack below).
+
+### 1. Setup
 
 ```bash
-uv sync                                    # 安裝依賴（含 dev 工具）
-cp .env.example .env                       # 複製環境變數範例，依需要調整
-uv run python manage.py migrate            # 套用資料庫 migration
-uv run python manage.py createsuperuser    # 建立本機測試帳號（Stage 1 用內建登入）
-uv run python manage.py runserver          # 啟動本機伺服器
+git clone https://github.com/minzhankuo-0719/shortlink.git
+cd shortlink
+uv sync                                    # installs runtime + dev deps (ruff, pre-commit)
+cp .env.example .env                       # local defaults work out of the box
 ```
 
-打開 http://127.0.0.1:8000 看首頁，http://127.0.0.1:8000/livez 看健康檢查。
+> Social login is optional locally: leave the OAuth variables in `.env` blank and those buttons simply
+> don't appear — you can still use username / password. To test Google/Facebook locally, fill in the
+> credentials (see [docs/deployment.md](docs/deployment.md) for where they come from). The database
+> defaults to SQLite and Redis falls back to an in-memory cache, so no extra services are needed to run.
 
-### 開發工具
+### 2. Run
 
 ```bash
-uv run pre-commit install                 # 第一次 clone 後執行一次，裝 git commit hook
-uv run ruff check . && uv run ruff format  # lint + 格式化
-uv run pytest                              # 跑測試（Stage 5 後）
+uv run python manage.py migrate            # apply database migrations
+uv run python manage.py createsuperuser    # create a local account to log in with
+uv run python manage.py runserver          # start the dev server
 ```
 
-## 本機 Docker（prod-like 環境）
+Open <http://127.0.0.1:8000> for the app and <http://127.0.0.1:8000/livez> for the health check.
 
-跑跟 Cloud Run 一樣的容器（gunicorn + WhiteNoise），搭配本機 Postgres/Redis，驗證部署用的 image 沒問題：
+### 3. Dev tooling
 
 ```bash
-cp .env.example .env                       # 確保有 SECRET_KEY 等變數
-docker compose up -d --build               # 起 web + db + redis
+uv run pre-commit install                  # run once after cloning (installs the git hook)
+uv run ruff check . && uv run ruff format  # lint + format
+```
+
+### Optional — prod-like stack with Docker
+
+Run the same container image Cloud Run uses (Gunicorn + WhiteNoise) against local Postgres and Redis, to
+verify the deployment image before shipping:
+
+```bash
+docker compose up -d --build               # web + postgres + redis
 docker compose exec web python manage.py createsuperuser
 ```
 
-打開 http://localhost:8000，登入後建立短網址、造訪、看儀表板點擊紀錄。`docker compose down -v` 清掉容器與資料。
+Open <http://localhost:8000>. `docker compose down -v` tears everything down, including volumes.
 
-## 部署到 Cloud Run
+---
 
-> 以下指令需要你自己在終端機執行（涉及建立雲端資源、計費、以及只有你本人能操作的 GCP/Facebook/Google
-> 帳號）。指令裡的 `PROJECT_ID`、`INSTANCE_CONNECTION_NAME` 等請替換成你自己的值。Region 統一用
-> `asia-east1`（台灣彰化）。
+## Deployment
 
-### 本專案實際使用的值（照抄前先核對）
+ShortLink is deployed on **Google Cloud Run**, backed by **Cloud SQL** (PostgreSQL), **Secret Manager**
+(secrets), **Artifact Registry** (image), and **Upstash** serverless Redis (redirect cache). A single
+multi-stage `Dockerfile` builds the container that runs both locally (via `docker compose`) and in the
+cloud.
 
-| 項目 | 值 |
-|---|---|
-| PROJECT_ID | `shortlink-499808`（專案編號 `642047376218`） |
-| Region | `asia-east1` |
-| Artifact Registry repo | `shortlink`（Docker，`asia-east1`） |
-| Image path | `asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest` |
-| Cloud Run service | `shortlink` |
-| 服務網址（對外只用這個） | https://shortlink-ljrbbufbfq-de.a.run.app |
-| 正式環境 Redis | Upstash serverless（secret `redis-url`） |
+The full step-by-step runbook — first deploy from scratch *and* the code-only redeploy path — is in
+**[docs/deployment.md](docs/deployment.md)**.
 
-> ⚠️ README 第 0–10 步是**第一次從零部署**用的。日常「只改了程式碼」的重新部署，照下面這段就好，不要重跑 0–10。
+---
 
-### 重新部署（只改了程式碼，沒動 secret/env 時）
+## Implementation
 
-```bash
-cd /Users/kevin/大橡科技                         # ← 一定要在專案目錄（含 Dockerfile）裡跑，否則 build 會說「Dockerfile required」
-git commit -am "<你的訊息>"                       # 先把要部署的程式碼進版，讓線上 image 對得回某個 commit
+### Architecture
 
-# 1) build + push（注意是 shortlink-499808，不是 shortlink-demo）
-gcloud builds submit --tag asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest .
+The Django project lives in `config/`; each feature is its own app under `apps/` (`core`, `accounts`,
+`shortener`, `analytics`). Business logic sits in each app's `services.py` so views and models stay thin
+and the logic is easy to test and reuse. Settings are layered (`base` / `dev` / `prod`), and every
+secret or per-environment value is read from the environment (12-factor, via django-environ) rather than
+hard-coded.
 
-# 2) 只換 image 部署。不要帶 --set-secrets / --set-env-vars：
-#    那兩個是「整組覆蓋」，漏列任何一個（例如 REDIS_URL）就會把線上既有設定洗掉，
-#    而 prod.py 缺 REDIS_URL 會啟動即報錯。只給 --image 會沿用上一版的所有 secret/env。
-gcloud run deploy shortlink \
-  --image=asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest \
-  --region=asia-east1
+### Redirect hot path
 
-# 3) 驗證容器有正常起來（= 設定有被繼承）
-curl -s https://shortlink-ljrbbufbfq-de.a.run.app/livez   # 應回 {"status": "ok"}
+```
+Visitor → GET /<short_code>
+   → resolve   Redis cache-aside (lookup in Redis; DB only on a miss)
+   → record    Click row (source IP / user agent / referer / time)
+   → 302       redirect to the destination URL
 ```
 
-**踩過的三個坑（已寫進上面）**：① 不在專案目錄跑 → `Dockerfile required`；② image path 用錯專案（`shortlink-demo`）→ push 被 `denied`；③ 重新部署誤帶 `--set-secrets` 漏了 `REDIS_URL` → 會洗掉線上 Redis 設定、容器起不來。
+### Key decisions
 
-### 0. 安裝 gcloud、建立專案
+- **Short codes — random base62, not sequential.** Codes are 7 random base62 characters from a CSPRNG
+  (`secrets`), with a unique constraint and a retry on the rare collision. A sequential ID encoded to
+  base62 would be trivially enumerable (and would leak how many links exist); hashing the URL would
+  collide and couldn't give the same URL different codes per user.
+- **302, not 301.** A `301 Moved Permanently` gets cached by the browser, so the *second* visit never
+  reaches the server and the click goes unrecorded. A `302` guarantees every visit is counted.
+- **Real client IP behind a proxy.** Cloud Run sits in front of the app, so the redirect reads the first
+  address in `X-Forwarded-For` (falling back to `REMOTE_ADDR` when there's no proxy, e.g. locally). The
+  header is only trusted because a proxy we control overwrites any client-supplied value — it would
+  otherwise be spoofable.
+- **Cache-aside with signal-based invalidation.** Resolved short codes are cached in Redis (TTL 1h). A
+  `post_save` / `post_delete` signal on `ShortLink` clears the cache entry, so creates, edits, and
+  deletes take effect immediately — invalidation lives in one place and can't be forgotten at a call
+  site.
+- **Auth via django-allauth.** OAuth is delegated to a well-tested library rather than hand-rolled. On
+  top of it sits the email-first entrance and cross-provider account linking by verified email.
 
-```bash
-# 安裝：https://cloud.google.com/sdk/docs/install
-gcloud init                                            # 登入並選好 region
-gcloud projects create shortlink-499808 --name="ShortLink"   # 本專案實際使用的 PROJECT_ID（GCP 專案 ID 全域唯一，重建請自行換一個）
-gcloud config set project shortlink-499808
-# 到 https://console.cloud.google.com/billing 把這個專案連到你的帳單帳戶（有 $300 免費額度）
+### Database
+
+Production uses **PostgreSQL** on Cloud SQL; locally it defaults to **SQLite** for zero-setup runs. The
+choice of Postgres keeps dev/prod parity for anything SQL-specific. Indexes are deliberate: `short_code`
+is unique (the redirect hot path), `(link, created_at)` is a composite index for time-ordered dashboard
+queries, and `owner` is indexed for per-user link lists.
+
+### Deployment shape
+
+A multi-stage `Dockerfile` produces a small image running **Gunicorn** with **WhiteNoise** serving
+hashed, compressed static files straight from the container. Secrets are injected from Secret Manager at
+deploy time; nothing sensitive is baked into the image.
+
+---
+
+## Project Structure
+
 ```
-
-### 1. 啟用所需 API
-
-```bash
-gcloud services enable \
-  run.googleapis.com \
-  sqladmin.googleapis.com \
-  secretmanager.googleapis.com \
-  artifactregistry.googleapis.com \
-  cloudbuild.googleapis.com
+shortlink/
+├── config/
+│   ├── settings/             layered 12-factor settings
+│   │   ├── base.py           shared config (apps, allauth, cache, DB)
+│   │   ├── dev.py            local overrides
+│   │   └── prod.py           secure production defaults (Cloud Run)
+│   └── urls.py               root routes + email-first entrance wiring
+├── apps/
+│   ├── core/                 home page, /livez health check, /privacy
+│   ├── accounts/             email-first sign-in entrance + custom allauth forms
+│   ├── shortener/            ShortLink model, short-code service, cache-aside, signals
+│   └── analytics/            Click model, client-IP parsing, record_click
+├── templates/                base layout, account/, shortener/, allauth overrides
+├── static/                   logo + static assets (served by WhiteNoise)
+├── docs/
+│   └── deployment.md         Cloud Run deployment runbook
+├── Dockerfile                multi-stage build (Gunicorn + WhiteNoise)
+├── docker-compose.yml        local prod-like stack (web + postgres + redis)
+├── entrypoint.sh             runs migrate on container start
+└── pyproject.toml / uv.lock  dependencies (managed by uv)
 ```
-
-### 2. 建立 Artifact Registry（存 Docker image）
-
-```bash
-gcloud artifacts repositories create shortlink \
-  --repository-format=docker \
-  --location=asia-east1
-```
-
-### 3. 建立 Cloud SQL（Postgres，最小規格）
-
-```bash
-gcloud sql instances create shortlink-db \
-  --database-version=POSTGRES_16 \
-  --tier=db-f1-micro \
-  --region=asia-east1 \
-  --storage-size=10GB \
-  --storage-auto-increase
-
-gcloud sql databases create shortlink --instance=shortlink-db
-gcloud sql users create shortlink --instance=shortlink-db --password='<選一個強密碼>'
-
-# 記下這個值，後面會用到（格式：PROJECT_ID:REGION:INSTANCE_NAME）
-gcloud sql instances describe shortlink-db --format='value(connectionName)'
-```
-
-### 4. 把 secrets 放進 Secret Manager
-
-```bash
-INSTANCE_CONNECTION_NAME="<上一步拿到的值>"
-
-# Django SECRET_KEY：產生一個隨機值
-python -c "import secrets; print(secrets.token_urlsafe(50))" | \
-  gcloud secrets create django-secret-key --data-file=-
-
-# DATABASE_URL：走 Cloud Run 掛載的 unix socket（見 docs/adr/0005）
-echo -n "postgres://shortlink:<上面設的密碼>@/shortlink?host=/cloudsql/${INSTANCE_CONNECTION_NAME}" | \
-  gcloud secrets create database-url --data-file=-
-
-# Google / Facebook OAuth 憑證（沿用你 .env 裡本機測試成功的那組值，之後第 8 步再補正式網域的 redirect URI）
-echo -n "<你的 GOOGLE_OAUTH_CLIENT_ID>" | gcloud secrets create google-oauth-client-id --data-file=-
-echo -n "<你的 GOOGLE_OAUTH_CLIENT_SECRET>" | gcloud secrets create google-oauth-client-secret --data-file=-
-echo -n "<你的 FACEBOOK_OAUTH_CLIENT_ID>" | gcloud secrets create facebook-oauth-client-id --data-file=-
-echo -n "<你的 FACEBOOK_OAUTH_CLIENT_SECRET>" | gcloud secrets create facebook-oauth-client-secret --data-file=-
-
-# REDIS_URL：正式環境用 Upstash serverless Redis（免 VPC connector）。到 https://upstash.com
-# 開一個 Redis（provider 選 GCP、region 盡量挑離 asia-east1 近的），複製它給的 rediss:// 連線字串。
-# prod.py 設成「缺 REDIS_URL 就啟動報錯」，所以這條一定要建（見 docs/adr/0010）。
-printf '%s' '<貼上 Upstash 的 rediss:// 連線字串>' | gcloud secrets create redis-url --data-file=-
-```
-
-### 5. 授權 Cloud Run 的服務帳號
-
-```bash
-PROJECT_NUMBER=$(gcloud projects describe shortlink-499808 --format='value(projectNumber)')
-SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-
-gcloud projects add-iam-policy-binding shortlink-499808 \
-  --member="serviceAccount:${SA}" --role="roles/secretmanager.secretAccessor"
-gcloud projects add-iam-policy-binding shortlink-499808 \
-  --member="serviceAccount:${SA}" --role="roles/cloudsql.client"
-```
-
-### 6. Build + push image
-
-```bash
-gcloud builds submit --tag asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest .
-```
-
-### 7. 部署 Cloud Run
-
-```bash
-gcloud run deploy shortlink \
-  --image=asia-east1-docker.pkg.dev/shortlink-499808/shortlink/web:latest \
-  --region=asia-east1 \
-  --platform=managed \
-  --allow-unauthenticated \
-  --min-instances=0 --max-instances=2 \
-  --add-cloudsql-instances="${INSTANCE_CONNECTION_NAME}" \
-  --set-secrets="SECRET_KEY=django-secret-key:latest,DATABASE_URL=database-url:latest,REDIS_URL=redis-url:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,FACEBOOK_OAUTH_CLIENT_ID=facebook-oauth-client-id:latest,FACEBOOK_OAUTH_CLIENT_SECRET=facebook-oauth-client-secret:latest" \
-  --set-env-vars="DJANGO_SETTINGS_MODULE=config.settings.prod,ALLOWED_HOSTS=.run.app"
-```
-
-部署完會印出服務網址（例如 `https://shortlink-xxxx-asia-east1.run.app`）。先記下來，下一步要用。
-
-```bash
-SERVICE_URL="<上面印出的網址>"
-
-# CSRF_TRUSTED_ORIGINS 需要知道實際網址才能設，所以分兩步 update
-gcloud run services update shortlink --region=asia-east1 \
-  --set-env-vars="DJANGO_SETTINGS_MODULE=config.settings.prod,ALLOWED_HOSTS=.run.app,CSRF_TRUSTED_ORIGINS=${SERVICE_URL}"
-```
-
-`entrypoint.sh` 會在每次容器啟動時自動跑 `migrate`（見 [`docs/adr/0005`](docs/adr/0005-cloud-run-deployment.md)
-的取捨說明），所以第一次部署成功、容器開始接流量時，資料庫 schema 就已經是最新的，不需要另外手動跑 migration。
-
-### 8. 補正式網域的 OAuth redirect URI
-
-拿到 `SERVICE_URL` 後（不管是 `*.run.app` 還是你之後綁的自訂網域），回到後台**新增**一組正式環境用的
-redirect URI（保留 localhost 那組，本機開發還會用到）：
-
-- **Google Cloud Console** → API 和服務 → 憑證 → 你的 OAuth 用戶端 → Authorized redirect URIs 加：
-  `${SERVICE_URL}/accounts/google/login/callback/`
-- **Facebook Developers** → 你的 App → Facebook 登入 → 設定 → Valid OAuth Redirect URIs 加：
-  `${SERVICE_URL}/accounts/facebook/login/callback/`
-  （注意：Facebook 對 `localhost` 的 HTTP 例外**不適用**正式網域，必須是 HTTPS——Cloud Run 預設就是 HTTPS，符合需求）
-
-### 9.（可選）綁自訂網域
-
-```bash
-gcloud run domain-mappings create --service=shortlink --domain=<你的網域> --region=asia-east1
-# 它會印出要在你的網域 DNS 後台加的記錄（通常是幾筆 CNAME），加完等 DNS 生效即可
-```
-
-綁好後，記得：
-1. 在 Google/Facebook 後台**再加一組**用自訂網域的 redirect URI（同第 8 步）
-2. `gcloud run services update` 把 `CSRF_TRUSTED_ORIGINS`（和需要的話 `ALLOWED_HOSTS`）改成包含新網域
-
-### 10. 驗收
-
-- `curl https://<服務網址>/livez` 回 `{"status": "ok"}`
-- 瀏覽器開服務網址 → 用 Google 或 Facebook 登入 → 建立短網址 → 造訪短網址確認重導成功 →
-  回儀表板確認看到剛才那次造訪的點擊紀錄與來源 IP
-
-## 專案進度與文件
-
-- [`CLAUDE.md`](CLAUDE.md)：單一事實來源，含目前進度、Roadmap、架構與關鍵決策
-- [`docs/adr/`](docs/adr/)：重要技術決策（Architecture Decision Records）
-- [`docs/learning-log.md`](docs/learning-log.md)：逐檔解說與學習筆記
-- [`docs/interview-qa.md`](docs/interview-qa.md)：面試考點整理
