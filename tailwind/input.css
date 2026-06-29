@@ -1,0 +1,6 @@
+/* Tailwind's entry file. The CLI replaces each directive with the generated
+   base/component/utility CSS, keeping only the classes found in `content`
+   (see tailwind.config.js). This compiles to static/css/app.css at build time. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -17,6 +17,24 @@ COPY pyproject.toml uv.lock ./
 # to install (it's a Django project run in place, not a packaged library).
 RUN uv sync --frozen --no-dev --no-install-project
 
+# --- tailwind -------------------------------------------------------------
+# Compiles the production stylesheet with Tailwind's standalone CLI (a single
+# binary, no Node toolchain). It scans the templates and emits a small, purged
+# CSS file, so prod serves its own stylesheet instead of the dev-only Play CDN.
+FROM debian:bookworm-slim AS tailwind
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ARG TAILWIND_VERSION=v3.4.19
+RUN curl -fsSL -o /usr/local/bin/tailwindcss \
+      "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64" \
+    && chmod +x /usr/local/bin/tailwindcss
+COPY tailwind.config.js ./
+COPY tailwind/input.css ./tailwind/input.css
+COPY templates ./templates
+RUN tailwindcss -i ./tailwind/input.css -o ./static/css/app.css --minify
+
 # --- runtime --------------------------------------------------------------
 FROM python:3.13-slim AS runtime
 
@@ -33,6 +51,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY . .
+
+# Bring in the compiled Tailwind stylesheet (built in the tailwind stage) so
+# collectstatic below picks it up and WhiteNoise serves it with a hashed name.
+COPY --from=tailwind /app/static/css/app.css ./static/css/app.css
 
 # collectstatic only reads template/static sources and writes to STATIC_ROOT —
 # it never touches the database or Redis — so throwaway placeholder values here

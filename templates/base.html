@@ -6,10 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ShortLink{% endblock %}</title>
   <link rel="icon" type="image/png" href="{% static 'shortlink.png' %}">
-  <!-- CDN build: zero-config, good enough for Stage 1. Swap to the Tailwind
-       CLI (with content purging) once the UI needs to be production-ready. -->
+  {% comment %} Dev uses Tailwind's Play CDN (zero-config, instant class
+     iteration); prod uses the self-hosted, purged CSS compiled by the Tailwind
+     CLI at image-build time — no third-party runtime dependency, smaller and
+     faster. {% endcomment %}
+  {% if tailwind_cdn %}
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
+  {% else %}
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% endif %}
   <!-- Apply the saved theme before paint to avoid a flash of the wrong theme. -->
   <script>if (localStorage.theme === 'dark') document.documentElement.classList.add('dark')</script>
 </head>

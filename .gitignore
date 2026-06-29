@@ -10,6 +10,8 @@ db.sqlite3
 db.sqlite3-journal
 /staticfiles/
 /media/
+# Tailwind's compiled output — generated at build time, never hand-edited.
+/static/css/
 
 # Environment / secrets (commit only the example)
 .env

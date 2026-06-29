@@ -90,6 +90,9 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                # Exposes `tailwind_cdn` (= DEBUG) so base.html serves the CDN in
+                # dev and the compiled, self-hosted CSS in prod.
+                "apps.core.context_processors.template_flags",
             ],
         },
     },
