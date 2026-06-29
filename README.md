@@ -191,6 +191,20 @@ A multi-stage `Dockerfile` produces a small image running **Gunicorn** with **Wh
 hashed, compressed static files straight from the container. Secrets are injected from Secret Manager at
 deploy time; nothing sensitive is baked into the image.
 
+### Security
+
+- **HTTPS only.** Behind Cloud Run's TLS proxy, HTTP is redirected to HTTPS, session/CSRF cookies are
+  `Secure`, and **HSTS** (1-year `max-age`, `includeSubDomains`, `preload`) stops browsers from ever
+  attempting HTTP again.
+- **Admin disabled in production.** Django's `/admin/` is a high-privilege, well-known target for
+  scanners and brute-force, so it isn't mounted in prod (env-gated by `ENABLE_ADMIN`) and returns 404
+  there; it stays available locally for data management.
+- **Trusted client IP.** `X-Forwarded-For` is honoured only because Cloud Run's proxy overwrites any
+  client-supplied value, so the recorded source IP can't be spoofed.
+
+**Hardening roadmap:** self-host Tailwind via its build-time CLI to drop the runtime CDN dependency,
+then layer on a Content-Security-Policy once inline scripts are removed.
+
 ---
 
 ## Project Structure
