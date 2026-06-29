@@ -50,7 +50,7 @@
 
 ### Demo
 
-<video src="https://github.com/minzhankuo-0719/shortlink/raw/main/docs/media/shortlink-demo.mp4" controls width="800"></video>
+https://github.com/user-attachments/assets/951a009e-78dc-4662-a6f6-9d081969c89a
 
 _End-to-end demo — sign in with Google, shorten a URL, visit it, and watch the click land on the dashboard with its source IP._
 
